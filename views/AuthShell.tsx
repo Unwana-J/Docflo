@@ -47,6 +47,7 @@ const AuthShell: React.FC<AuthShellProps> = ({ onReady }) => {
         }
       } catch (err: any) {
         console.error('Auth error:', err);
+        // If API is not available, still allow the app to load in demo mode
         setStage('login');
       }
     };
