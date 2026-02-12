@@ -169,6 +169,20 @@ const AuthShell: React.FC<AuthShellProps> = ({ onReady }) => {
                   </>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const demoUser = { id: 'demo', email: 'demo@example.com', status: 'active' };
+                  const demoTeams = [{ id: 'team-1', name: 'Demo Team', role: 'owner' }];
+                  onReady(demoUser, [
+                    { id: 'team-1', name: 'Demo Team', role: 'owner', members: [], invites: [], templates: [], documents: [] }
+                  ], 'team-1');
+                  setStage('ready');
+                }}
+                className="w-full bg-slate-100 text-slate-900 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-200 transition-all"
+              >
+                View Demo
+              </button>
             </form>
           )}
         </div>

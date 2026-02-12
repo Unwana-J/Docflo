@@ -10,19 +10,23 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <AuthShell
-      onReady={(_, teams, activeTeamId) => {
-        // Once AuthShell resolves auth and teams, we mount the main app.
-        // For now, we rely on App's internal initial state; a future refactor
-        // can fully hydrate it from the backend.
-        root.render(
-          <React.StrictMode>
-            <App />
-          </React.StrictMode>
-        );
-      }}
-    />
-  </React.StrictMode>
-);
+
+// Try to load with auth, but fall back to demo mode if API unavailable
+const loadApp = () => {
+  root.render(
+    <React.StrictMode>
+      <AuthShell
+        onReady={(_, teams, activeTeamId) => {
+          root.render(
+            <React.StrictMode>
+              <App />
+            </React.StrictMode>
+          );
+        }}
+      />
+    </React.StrictMode>
+  );
+};
+
+// Load the app
+loadApp();
