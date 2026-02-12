@@ -1,0 +1,7 @@
+{
+  "name": "DocuFlow AI",
+  "description": "A collaborative platform for teams to manage document templates, using AI to detect editable fields and generate professional documents with consistent branding.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
