@@ -1,6 +1,25 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { TemplateField, FieldType, FieldCategory, BoundingBox, FieldStyle } from "../types";
+import { TemplateField, FieldType, FieldCategory } from "../types";
+
+const getGeminiClient = () => {
+  // Prefer Vite-style client env; fall back to any injected process env for flexibility
+  const apiKey =
+    (typeof import.meta !== "undefined" &&
+      (import.meta as any).env &&
+      ((import.meta as any).env.VITE_GEMINI_API_KEY as string | undefined)) ||
+    (typeof process !== "undefined" &&
+      (process.env.GEMINI_API_KEY || process.env.API_KEY)) ||
+    "";
+
+  if (!apiKey) {
+    throw new Error(
+      "Gemini API key is not configured. Set VITE_GEMINI_API_KEY in your environment."
+    );
+  }
+
+  return new GoogleGenAI({ apiKey });
+};
 
 export interface DetectionResult {
   fields: TemplateField[];
@@ -19,7 +38,7 @@ export const detectTemplateFields = async (
     throw new Error("The document image is too large for AI analysis. Please try a smaller file or lower resolution.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getGeminiClient();
   const parts: any[] = [];
   
   parts.push({
@@ -133,7 +152,7 @@ export const fillFormWithAI = async (
   fields: TemplateField[],
   userInstruction: string
 ): Promise<Record<string, string>> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getGeminiClient();
   const dynamicFields = fields.filter(f => f.category === FieldCategory.DYNAMIC).map(f => f.name).join(', ');
   const prompt = `Fill these variables for "${templateName}": [${dynamicFields}]. User request: "${userInstruction}". Return JSON.`;
   
@@ -151,7 +170,7 @@ export const fillFormWithAI = async (
 };
 
 export const suggestSubCategories = async (categoryName: string): Promise<string[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getGeminiClient();
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -161,5 +180,62 @@ export const suggestSubCategories = async (categoryName: string): Promise<string
     return JSON.parse(response.text || "[]");
   } catch (err) {
     return [];
+  }
+};
+
+// Bulk / CSV helpers
+
+export const mapTemplateFieldsToCsvHeaders = async (
+  templateFieldNames: string[],
+  csvHeaders: string[]
+): Promise<Record<string, string | null>> => {
+  const ai = getGeminiClient();
+
+  const fieldList = templateFieldNames.join(", ");
+  const headerList = csvHeaders.join(", ");
+
+  const prompt = `I have a template with these fields: [${fieldList}].
+I have a CSV with these headers: [${headerList}].
+Please map each template field to the most likely CSV header.
+Return a JSON object where keys are template fields and values are CSV headers.
+If no match, use null.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+
+    const mapping = JSON.parse(response.text || "{}");
+    return mapping;
+  } catch (err) {
+    console.error("AI mapping for template fields failed", err);
+    return {};
+  }
+};
+
+export const mapCustomerCsvHeaders = async (
+  rawHeaderLine: string
+): Promise<Record<string, string | null>> => {
+  const ai = getGeminiClient();
+
+  const prompt = `I have a CSV with these headers: "${rawHeaderLine}".
+Please map them to the following fields: [name, email, company, phone].
+Return a JSON object where keys are my target fields and values are the CSV header names.
+If a header doesn't exist, use null.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+
+    const mapping = JSON.parse(response.text || "{}");
+    return mapping;
+  } catch (err) {
+    console.error("AI header mapping for customers failed", err);
+    return {};
   }
 };

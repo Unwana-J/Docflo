@@ -20,8 +20,8 @@ import {
   Settings2
 } from 'lucide-react';
 import { Team, DocumentTemplate, BulkGenJob } from '../types';
-import { GoogleGenAI } from "@google/genai";
 import { processBulkGeneration } from '../services/documentService';
+import { mapTemplateFieldsToCsvHeaders } from '../services/geminiService';
 
 interface BulkGeneratorProps {
   activeTeam: Team;
@@ -67,24 +67,11 @@ const BulkGenerator: React.FC<BulkGeneratorProps> = ({ activeTeam }) => {
 
   const autoMapHeaders = async (csvHeaders: string[], template: DocumentTemplate) => {
     setIsMappingLoading(true);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    const fieldList = template.fields.map(f => f.name).join(', ');
-    const headerList = csvHeaders.join(', ');
-
-    const prompt = `I have a template with these fields: [${fieldList}]. 
-    I have a CSV with these headers: [${headerList}].
-    Please map each template field to the most likely CSV header.
-    Return a JSON object where keys are template fields and values are CSV headers. If no match, use null.`;
-
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-
-      const aiMapping = JSON.parse(response.text || "{}");
+      const aiMapping = await mapTemplateFieldsToCsvHeaders(
+        template.fields.map(f => f.name),
+        csvHeaders
+      );
       setMapping(aiMapping);
     } catch (err) {
       console.error("AI Mapping failed", err);

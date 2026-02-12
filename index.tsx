@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import AuthShell from './views/AuthShell';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,6 +12,17 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <AuthShell
+      onReady={(_, teams, activeTeamId) => {
+        // Once AuthShell resolves auth and teams, we mount the main app.
+        // For now, we rely on App's internal initial state; a future refactor
+        // can fully hydrate it from the backend.
+        root.render(
+          <React.StrictMode>
+            <App />
+          </React.StrictMode>
+        );
+      }}
+    />
   </React.StrictMode>
 );

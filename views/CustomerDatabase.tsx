@@ -22,7 +22,7 @@ import {
   Tag as TagIcon
 } from 'lucide-react';
 import { Team, Customer } from '../types';
-import { GoogleGenAI, Type } from "@google/genai";
+import { mapCustomerCsvHeaders } from '../services/geminiService';
 
 interface CustomerDatabaseProps {
   activeTeam: Team;
@@ -95,22 +95,8 @@ const CustomerDatabase: React.FC<CustomerDatabaseProps> = ({ activeTeam, onUpdat
       const csvContent = event.target?.result as string;
       const lines = csvContent.split('\n').filter(l => l.trim());
       const headers = lines[0];
-
-      // Simulate AI Header Mapping using Gemini
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       try {
-        const prompt = `I have a CSV with these headers: "${headers}". 
-        Please map them to the following fields: [name, email, company, phone]. 
-        Return a JSON object where keys are my target fields and values are the CSV header names. 
-        If a header doesn't exist, use null.`;
-
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: prompt,
-          config: { responseMimeType: "application/json" }
-        });
-
-        const mapping = JSON.parse(response.text || "{}");
+        const mapping = await mapCustomerCsvHeaders(headers);
         const csvHeaders = headers.split(',').map(h => h.trim());
         
         const importedCustomers: Customer[] = lines.slice(1).map(line => {

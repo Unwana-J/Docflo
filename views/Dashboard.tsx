@@ -67,11 +67,53 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
     { name: 'Sun', count: 5 },
   ];
 
+  const firstTemplate = activeTeam.templates[0];
+  const secondTemplate = activeTeam.templates[1];
+
   const teamActivity = [
-    { id: 1, user: 'Sarah Miller', action: 'updated', target: activeTeam.templates[0]?.name || 'NDA', time: '12m ago', icon: EditIcon, template: activeTeam.templates[0] },
-    { id: 2, user: 'Alex Johnson', action: 'generated', target: activeTeam.templates[1]?.name || 'Offer Letter', time: '1h ago', icon: FileIcon, template: activeTeam.templates[1] },
-    { id: 3, user: 'System', action: 'synced', target: 'Brand Colors', time: '3h ago', icon: ZapIcon, view: 'brand' },
-    { id: 4, user: 'Sarah Miller', action: 'archived', target: 'Old Invoice Template', time: '5h ago', icon: ArchiveIcon },
+    ...(firstTemplate
+      ? [
+          {
+            id: 1,
+            user: "Sarah Miller",
+            action: "updated",
+            target: firstTemplate.name,
+            time: "12m ago",
+            icon: EditIcon,
+            template: firstTemplate
+          }
+        ]
+      : []),
+    ...(secondTemplate
+      ? [
+          {
+            id: 2,
+            user: "Alex Johnson",
+            action: "generated",
+            target: secondTemplate.name,
+            time: "1h ago",
+            icon: FileIcon,
+            template: secondTemplate
+          }
+        ]
+      : []),
+    {
+      id: 3,
+      user: "System",
+      action: "synced",
+      target: "Brand Colors",
+      time: "3h ago",
+      icon: ZapIcon,
+      view: "brand"
+    },
+    {
+      id: 4,
+      user: "Sarah Miller",
+      action: "archived",
+      target: "Old Invoice Template",
+      time: "5h ago",
+      icon: ArchiveIcon
+    }
   ];
 
   const handleActivityClick = (act: any) => {
