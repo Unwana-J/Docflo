@@ -46,11 +46,8 @@ const AuthShell: React.FC<AuthShellProps> = ({ onReady }) => {
           setStage('teamSelector');
         }
       } catch (err: any) {
-        if (err.message === 'unauthorized') {
-          setStage('login');
-        } else {
-          setStage('login');
-        }
+        console.error('Auth error:', err);
+        setStage('login');
       }
     };
     init();
