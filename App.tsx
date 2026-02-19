@@ -13,53 +13,10 @@ import CustomerDatabase from './views/CustomerDatabase';
 import BulkGenerator from './views/BulkGenerator';
 import CreateDocumentModal from './components/CreateDocumentModal';
 
-const STORAGE_KEY = 'docflo_state_v1';
-
-interface PersistedState {
-  teams: Team[];
-  activeTeamId: string;
-  activeView: string;
-}
-
-const loadInitialState = (): PersistedState => {
-  if (typeof window === 'undefined') {
-    return {
-      teams: INITIAL_TEAMS,
-      activeTeamId: INITIAL_TEAMS[0].id,
-      activeView: 'dashboard',
-    };
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        teams: INITIAL_TEAMS,
-        activeTeamId: INITIAL_TEAMS[0].id,
-        activeView: 'dashboard',
-      };
-    }
-    const parsed = JSON.parse(raw) as PersistedState;
-    return {
-      teams: parsed.teams || INITIAL_TEAMS,
-      activeTeamId: parsed.activeTeamId || INITIAL_TEAMS[0].id,
-      activeView: parsed.activeView || 'dashboard',
-    };
-  } catch {
-    return {
-      teams: INITIAL_TEAMS,
-      activeTeamId: INITIAL_TEAMS[0].id,
-      activeView: 'dashboard',
-    };
-  }
-};
-
 const App: React.FC = () => {
-  const initial = loadInitialState();
-
-  const [teams, setTeams] = useState<Team[]>(initial.teams);
-  const [activeTeamId, setActiveTeamId] = useState<string>(initial.activeTeamId);
-  const [activeView, setActiveView] = useState<string>(initial.activeView);
+  const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
+  const [activeTeamId, setActiveTeamId] = useState<string>(INITIAL_TEAMS[0].id);
+  const [activeView, setActiveView] = useState<string>('dashboard');
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -68,17 +25,6 @@ const App: React.FC = () => {
   const handleUpdateTeam = (updatedTeam: Team) => {
     setTeams(prev => prev.map(t => t.id === updatedTeam.id ? updatedTeam : t));
   };
-
-  // Persist lightweight app state in the browser
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const payload: PersistedState = {
-      teams,
-      activeTeamId,
-      activeView,
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [teams, activeTeamId, activeView]);
 
   const handleTemplateUploadComplete = (newTemplate: DocumentTemplate) => {
     setTeams(prev => prev.map(team => {

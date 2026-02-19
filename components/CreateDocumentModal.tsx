@@ -112,20 +112,8 @@ const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({ isOpen, onClo
       if (type === 'pdf') {
         window.print();
       } else {
-        // Simple DOCX-style fallback for browser demo using filled values
-        const lines: string[] = [];
-        lines.push(`Template: ${selectedTemplate.name}`);
-        lines.push(`Title: ${generatedTitle}`);
-        lines.push('');
-        lines.push('Fields:');
-        selectedTemplate.fields.forEach((field) => {
-          const value = formData[field.name] || '';
-          lines.push(`- ${field.name}: ${value}`);
-        });
-
-        const blob = new Blob([lines.join('\n')], {
-          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        });
+        // Simple DOCX fallback for browser demo
+        const blob = new Blob(['Document content'], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -249,78 +237,31 @@ const CreateDocumentModal: React.FC<CreateDocumentModalProps> = ({ isOpen, onClo
                         <ScanLine className="w-3 h-3 text-emerald-400" /> PIXEL-PERFECT FIDELITY ACTIVE
                       </div>
                    </div>
-                  <div className="h-full overflow-y-auto p-12 custom-scrollbar flex justify-center bg-slate-300/20 print:p-0 print:bg-white print:overflow-visible">
+                   <div className="h-full overflow-y-auto p-12 custom-scrollbar flex justify-center bg-slate-300/20 print:p-0 print:bg-white print:overflow-visible">
                       <div className="bg-white shadow-2xl relative print:shadow-none" style={{ height: 'fit-content' }}>
-                        {selectedTemplate.fidelityImage ? (
-                          <>
-                            <img
-                              src={selectedTemplate.fidelityImage}
-                              className="block w-[1000px] h-auto"
-                              alt="Fidelity Master"
-                            />
-                            {selectedTemplate.fields.map(
-                              (field) =>
-                                field.rect && (
-                                  <div
-                                    key={field.id}
-                                    className={`absolute flex items-center transition-all ${
-                                      focusedField === field.name
-                                        ? 'ring-4 ring-blue-500/20 bg-blue-50/10'
-                                        : ''
-                                    }`}
-                                    style={{
-                                      top: `${field.rect.ymin / 10}%`,
-                                      left: `${field.rect.xmin / 10}%`,
-                                      height: `${(field.rect.ymax - field.rect.ymin) / 10}%`,
-                                      width: `${(field.rect.xmax - field.rect.xmin) / 10}%`,
-                                      fontSize: field.style?.fontSize || 'calc(1.1vw)',
-                                      fontWeight: field.style?.fontWeight || 'bold',
-                                      color: field.style?.color || '#000',
-                                      textAlign: field.style?.textAlign || 'left',
-                                      justifyContent:
-                                        field.style?.textAlign === 'center'
-                                          ? 'center'
-                                          : field.style?.textAlign === 'right'
-                                            ? 'flex-end'
-                                            : 'flex-start',
-                                      padding: '2px 4px'
-                                    }}
-                                  >
-                                    <span
-                                      className={`${
-                                        !formData[field.name]
-                                          ? 'text-amber-500/50 italic print:hidden'
-                                          : ''
-                                      }`}
-                                    >
-                                      {formData[field.name] || `[${field.name}]`}
-                                    </span>
-                                  </div>
-                                )
-                            )}
-                          </>
-                        ) : (
-                          <div className="p-12 max-w-3xl">
-                            <h3 className="text-2xl font-black text-slate-900 mb-4">
-                              {selectedTemplate.name}
-                            </h3>
-                            <p className="text-sm text-slate-500 mb-6">
-                              Generated preview (no fidelity image available).
-                            </p>
-                            <div className="space-y-3 text-sm text-slate-800">
-                              {selectedTemplate.fields.map((field) => (
-                                <div key={field.id} className="flex gap-2">
-                                  <span className="font-black min-w-[140px] uppercase text-[10px] text-slate-400 tracking-widest">
-                                    {field.name}
-                                  </span>
-                                  <span className="font-medium">
-                                    {formData[field.name] || `[${field.name}]`}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                         <img src={selectedTemplate.fidelityImage} className="block w-[1000px] h-auto" alt="Fidelity Master" />
+                         {selectedTemplate.fields.map(field => field.rect && (
+                           <div 
+                            key={field.id}
+                            className={`absolute flex items-center transition-all ${focusedField === field.name ? 'ring-4 ring-blue-500/20 bg-blue-50/10' : ''}`}
+                            style={{
+                              top: `${field.rect.ymin / 10}%`,
+                              left: `${field.rect.xmin / 10}%`,
+                              height: `${(field.rect.ymax - field.rect.ymin) / 10}%`,
+                              width: `${(field.rect.xmax - field.rect.xmin) / 10}%`,
+                              fontSize: field.style?.fontSize || 'calc(1.1vw)',
+                              fontWeight: field.style?.fontWeight || 'bold',
+                              color: field.style?.color || '#000',
+                              textAlign: field.style?.textAlign || 'left',
+                              justifyContent: field.style?.textAlign === 'center' ? 'center' : field.style?.textAlign === 'right' ? 'flex-end' : 'flex-start',
+                              padding: '2px 4px'
+                            }}
+                           >
+                              <span className={`${!formData[field.name] ? 'text-amber-500/50 italic print:hidden' : ''}`}>
+                                {formData[field.name] || `[${field.name}]`}
+                              </span>
+                           </div>
+                         ))}
                       </div>
                    </div>
                 </div>
