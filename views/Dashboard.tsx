@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { 
-  FileText, 
-  TrendingUp, 
-  Clock, 
+import {
+  FileText,
+  TrendingUp,
+  Clock,
   Star,
   Search,
   ChevronRight,
@@ -19,7 +19,9 @@ import {
   Palette,
   Edit3,
   X,
-  Sparkles
+  Sparkles,
+  BarChart3,
+  Settings2
 } from 'lucide-react';
 import { Team, DocumentTemplate } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -50,8 +52,8 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
   const filteredSearchTemplates = useMemo(() => {
     if (!searchQuery) return [];
     const q = searchQuery.toLowerCase();
-    return activeTeam.templates.filter(t => 
-      t.name.toLowerCase().includes(q) || 
+    return activeTeam.templates.filter(t =>
+      t.name.toLowerCase().includes(q) ||
       t.category.toLowerCase().includes(q) ||
       t.tags?.some(tag => tag.toLowerCase().includes(q))
     ).slice(0, 5);
@@ -90,13 +92,13 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
           </div>
           <p className="text-slate-500 font-medium text-lg">Manage and monitor {activeTeam.name} operations.</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="relative group" ref={searchRef}>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 group-focus-within:text-blue-600 transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Jump to template..." 
+            <input
+              type="text"
+              placeholder="Jump to template..."
               value={searchQuery}
               onFocus={() => setShowSearchDropdown(true)}
               onChange={(e) => {
@@ -108,13 +110,13 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
             {showSearchDropdown && searchQuery && (
               <div className="absolute top-full mt-3 left-0 w-full bg-white border border-slate-200 rounded-3xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 duration-200">
                 <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Search Results</span>
-                   <button onClick={() => setSearchQuery('')} className="p-1 hover:bg-slate-200 rounded-lg"><X className="w-3 h-3" /></button>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Search Results</span>
+                  <button onClick={() => setSearchQuery('')} className="p-1 hover:bg-slate-200 rounded-lg"><X className="w-3 h-3" /></button>
                 </div>
                 {filteredSearchTemplates.length > 0 ? (
                   <div className="p-2">
                     {filteredSearchTemplates.map(t => (
-                      <button 
+                      <button
                         key={t.id}
                         onClick={() => {
                           onTemplateClick(t);
@@ -124,13 +126,13 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
                         className="w-full flex items-center justify-between p-4 hover:bg-blue-50 rounded-2xl transition-all group"
                       >
                         <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600">
-                             <FileText className="w-5 h-5" />
-                           </div>
-                           <div className="text-left">
-                              <p className="text-sm font-black text-slate-900 truncate max-w-[150px]">{t.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">{t.category}</p>
-                           </div>
+                          <div className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-black text-slate-900 truncate max-w-[150px]">{t.name}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">{t.category}</p>
+                          </div>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                       </button>
@@ -144,7 +146,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
               </div>
             )}
           </div>
-          <button 
+          <button
             onClick={onCreateNewClick}
             className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-sm shadow-2xl hover:bg-blue-600 transition-all flex items-center gap-3 whitespace-nowrap group overflow-hidden relative"
           >
@@ -159,7 +161,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
 
       {/* Quick Start Bento Grid */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <button 
+        <button
           onClick={onCreateNewClick}
           className="flex items-center justify-between p-8 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm hover:shadow-xl hover:border-blue-400 transition-all text-left group"
         >
@@ -173,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
           <ArrowUpRight className="w-6 h-6 text-slate-300 group-hover:text-blue-600" />
         </button>
 
-        <button 
+        <button
           onClick={() => onNavigate('upload')}
           className="flex items-center justify-between p-8 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all text-left group"
         >
@@ -187,7 +189,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
           <ArrowUpRight className="w-6 h-6 text-slate-300 group-hover:text-emerald-600" />
         </button>
 
-        <button 
+        <button
           onClick={() => onNavigate('brand')}
           className="flex items-center justify-between p-8 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm hover:shadow-xl hover:border-purple-400 transition-all text-left group"
         >
@@ -217,7 +219,9 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
                 <div className={`p-3 bg-gradient-to-br ${stat.color} rounded-2xl text-white shadow-xl`}>
                   <stat.icon className="w-6 h-6" />
                 </div>
-                <MoreVertical className="w-5 h-5 text-slate-300" />
+                <button className="p-2 text-slate-300 hover:text-slate-600 transition-colors">
+                  <MoreVertical className="w-5 h-5" />
+                </button>
               </div>
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
               <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</h3>
@@ -252,37 +256,37 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 800}} 
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 800 }}
                   dy={15}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 800}} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 800 }}
                 />
-                <Tooltip 
-                  cursor={{fill: '#f8fafc', radius: 12}}
+                <Tooltip
+                  cursor={{ fill: '#f8fafc', radius: 12 }}
                   contentStyle={{
-                    borderRadius: '24px', 
-                    border: 'none', 
+                    borderRadius: '24px',
+                    border: 'none',
                     boxShadow: '0 25px 50px -12px rgba(0,0,0,0.1)',
                     padding: '20px'
                   }}
                   itemStyle={{ fontWeight: 900, fontSize: '14px' }}
                 />
-                <Bar 
-                  dataKey="count" 
-                  radius={[12, 12, 12, 12]} 
+                <Bar
+                  dataKey="count"
+                  radius={[12, 12, 12, 12]}
                   barSize={32}
                 >
                   {chartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={index === 4 ? '#1e293b' : 'url(#barGradient)'} 
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={index === 4 ? '#1e293b' : 'url(#barGradient)'}
                       className="transition-all duration-300 hover:opacity-80"
                     />
                   ))}
@@ -296,18 +300,18 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
         <div className="lg:col-span-4 flex flex-col gap-8">
           <div className="bg-slate-900 rounded-[3rem] p-10 shadow-2xl flex-1 flex flex-col overflow-hidden relative">
             <div className="absolute top-0 right-0 p-8 opacity-10">
-               <Zap className="w-32 h-32 text-white" />
+              <Zap className="w-32 h-32 text-white" />
             </div>
             <div className="relative z-10 flex flex-col h-full">
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-xl font-black text-white tracking-tight">Team Pulse</h3>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
               </div>
-              
+
               <div className="space-y-6 overflow-y-auto custom-scrollbar pr-2">
                 {teamActivity.map((act) => (
-                  <div 
-                    key={act.id} 
+                  <div
+                    key={act.id}
                     onClick={() => handleActivityClick(act)}
                     className="flex gap-4 group cursor-pointer"
                   >
@@ -325,7 +329,7 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
                 ))}
               </div>
 
-              <button 
+              <button
                 onClick={() => onNavigate('team')}
                 className="mt-8 w-full py-4 bg-white/5 hover:bg-white/10 rounded-2xl text-[10px] font-black text-white/40 uppercase tracking-[0.2em] transition-all border border-white/5"
               >
@@ -335,38 +339,38 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, onCr
           </div>
 
           <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-10">
-             <div className="flex items-center gap-4 mb-6">
-                <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
-                   <Star className="w-6 h-6" />
-                </div>
-                <div>
-                   <h4 className="font-black text-slate-900 tracking-tight">Top Asset</h4>
-                   <p className="text-xs text-slate-400 font-bold uppercase">Trending this week</p>
-                </div>
-             </div>
-             {activeTeam.templates.length > 0 ? (
-               <div 
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
+                <Star className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-black text-slate-900 tracking-tight">Top Asset</h4>
+                <p className="text-xs text-slate-400 font-bold uppercase">Trending this week</p>
+              </div>
+            </div>
+            {activeTeam.templates.length > 0 ? (
+              <div
                 onClick={() => onTemplateClick(activeTeam.templates[0])}
                 className="p-5 bg-slate-50 border border-slate-100 rounded-3xl hover:border-blue-300 transition-all cursor-pointer group"
-               >
-                 <div className="flex items-center justify-between">
-                    <p className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{activeTeam.templates[0].name}</p>
-                    <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600" />
-                 </div>
-                 <div className="flex items-center gap-2 mt-2">
-                    <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded uppercase">{activeTeam.templates[0].category}</span>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">42 Generations</span>
-                 </div>
-               </div>
-             ) : (
-               <button 
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{activeTeam.templates[0].name}</p>
+                  <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600" />
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded uppercase">{activeTeam.templates[0].category}</span>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">42 Generations</span>
+                </div>
+              </div>
+            ) : (
+              <button
                 onClick={() => onNavigate('upload')}
                 className="w-full p-8 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-3 hover:bg-blue-50/50 transition-all group"
-               >
-                  <Plus className="w-6 h-6 text-slate-200 group-hover:text-blue-600" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add First Template</span>
-               </button>
-             )}
+              >
+                <Plus className="w-6 h-6 text-slate-200 group-hover:text-blue-600" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add First Template</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

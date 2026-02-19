@@ -47,7 +47,7 @@ export interface TemplateField {
   required: boolean;
   defaultValue?: string;
   options?: string[];
-  rect?: BoundingBox; 
+  rect?: BoundingBox;
   style?: FieldStyle; // Captured branding styles for the overlay text
   pageIndex?: number;
 }
@@ -67,9 +67,9 @@ export interface DocumentTemplate {
   category: string;
   subCategory?: string;
   tags: string[];
-  content: string; 
-  fidelityImage?: string; 
-  fidelityMaster?: string; 
+  content: string;
+  fidelityImage?: string;
+  fidelityMaster?: string;
   fields: TemplateField[];
   createdAt: string;
   updatedAt: string;
@@ -77,6 +77,13 @@ export interface DocumentTemplate {
   history: VersionHistory[];
   usageCount?: number;
   lastUsed?: string;
+  isFavorite?: boolean;
+}
+
+export interface DetectionResult {
+  fields: TemplateField[];
+  suggestedTitle: string;
+  processedContent: string;
 }
 
 export interface BrandAssets {

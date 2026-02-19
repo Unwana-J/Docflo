@@ -4,6 +4,8 @@ import { FileText } from 'lucide-react';
 import { INITIAL_TEAMS } from './constants';
 import { Team, DocumentTemplate, Category } from './types';
 import Sidebar from './components/Sidebar';
+import { usePermission } from './hooks/usePermission';
+import { UserRole } from './types';
 import Dashboard from './views/Dashboard';
 import TemplateUpload from './views/TemplateUpload';
 import DocumentGenerator from './views/DocumentGenerator';
@@ -21,6 +23,9 @@ const App: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const activeTeam = teams.find(t => t.id === activeTeamId) || teams[0];
+  const currentUser = activeTeam.members[0]; // Assuming first member is current session for demo
+  const currentUserRole = currentUser?.role || UserRole.ADMIN;
+  const { can } = usePermission(activeTeam, currentUserRole);
 
   const handleUpdateTeam = (updatedTeam: Team) => {
     setTeams(prev => prev.map(t => t.id === updatedTeam.id ? updatedTeam : t));
@@ -50,13 +55,13 @@ const App: React.FC = () => {
         }
       }
 
-      return { 
-        ...team, 
+      return {
+        ...team,
         templates: [newTemplate, ...team.templates],
         categories: updatedCategories
       };
     }));
-    
+
     setActiveView('dashboard');
   };
 
@@ -68,10 +73,10 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (activeView === 'generate' && selectedTemplate) {
       return (
-        <DocumentGenerator 
-          template={selectedTemplate} 
+        <DocumentGenerator
+          template={selectedTemplate}
           team={activeTeam}
-          onBack={() => setActiveView('dashboard')} 
+          onBack={() => setActiveView('dashboard')}
         />
       );
     }
@@ -79,8 +84,8 @@ const App: React.FC = () => {
     switch (activeView) {
       case 'dashboard':
         return (
-          <Dashboard 
-            activeTeam={activeTeam} 
+          <Dashboard
+            activeTeam={activeTeam}
             onTemplateClick={handleTemplateClick}
             onCreateNewClick={() => setIsCreateModalOpen(true)}
             onNavigate={(view) => setActiveView(view)}
@@ -88,36 +93,49 @@ const App: React.FC = () => {
         );
       case 'upload':
         return (
-          <TemplateUpload 
-            onComplete={handleTemplateUploadComplete} 
+          <TemplateUpload
+            onComplete={handleTemplateUploadComplete}
             onCancel={() => setActiveView('dashboard')}
             activeTeam={activeTeam}
           />
         );
       case 'knowledge':
         return (
-          <Repository 
-            activeTeam={activeTeam} 
-            onTemplateClick={handleTemplateClick} 
+          <Repository
+            activeTeam={activeTeam}
+            onUpdateTeam={handleUpdateTeam}
+            onTemplateClick={handleTemplateClick}
             onAddNewTemplate={() => setActiveView('upload')}
           />
         );
       case 'customers':
+        if (!can('manage_customers')) {
+          setActiveView('dashboard');
+          return null;
+        }
         return (
-          <CustomerDatabase 
+          <CustomerDatabase
             activeTeam={activeTeam}
             onUpdateTeam={handleUpdateTeam}
           />
         );
       case 'bulk':
+        if (!can('generate_doc')) {
+          setActiveView('dashboard');
+          return null;
+        }
         return (
-          <BulkGenerator 
+          <BulkGenerator
             activeTeam={activeTeam}
           />
         );
       case 'team':
+        if (!can('manage_team')) {
+          setActiveView('dashboard');
+          return null;
+        }
         return (
-          <Settings 
+          <Settings
             activeTeam={activeTeam}
             onUpdateTeam={handleUpdateTeam}
           />
@@ -125,25 +143,25 @@ const App: React.FC = () => {
       case 'brand':
         return (
           <div className="bg-white rounded-[2.5rem] border border-slate-200 p-12 shadow-sm animate-in fade-in duration-500">
-             <div className="flex items-center justify-between mb-10">
-                <div>
-                  <h2 className="text-3xl font-black mb-2 tracking-tight">Visual Identity</h2>
-                  <p className="text-slate-500 font-medium">Standardize the look of your team's artifacts.</p>
-                </div>
-                <button 
-                  onClick={() => setActiveView('team')}
-                  className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
-                >
-                  Open Settings
-                </button>
-             </div>
-            
+            <div className="flex items-center justify-between mb-10">
+              <div>
+                <h2 className="text-3xl font-black mb-2 tracking-tight">Visual Identity</h2>
+                <p className="text-slate-500 font-medium">Standardize the look of your team's artifacts.</p>
+              </div>
+              <button
+                onClick={() => setActiveView('team')}
+                className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
+              >
+                Open Settings
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <div className="space-y-8">
                 <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Primary Brand Color</label>
                   <div className="flex items-center gap-6">
-                    <div className="w-20 h-20 rounded-[1.5rem] shadow-2xl border-4 border-white" style={{backgroundColor: activeTeam.assets.primaryColor}} />
+                    <div className="w-20 h-20 rounded-[1.5rem] shadow-2xl border-4 border-white" style={{ backgroundColor: activeTeam.assets.primaryColor }} />
                     <div className="flex-1">
                       <p className="text-xl font-black text-slate-900 font-mono tracking-tight">{activeTeam.assets.primaryColor}</p>
                       <p className="text-xs text-slate-500 font-medium mt-1 uppercase">HEX Code</p>
@@ -166,21 +184,23 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-      <Sidebar 
-        activeView={activeView} 
-        setActiveView={setActiveView} 
+      <Sidebar
+        activeView={activeView}
+        setActiveView={setActiveView}
         teams={teams}
         activeTeam={activeTeam}
         setActiveTeamId={setActiveTeamId}
+        currentUser={currentUser}
+        currentUserRole={currentUserRole}
       />
-      
+
       <main className="flex-1 ml-64 p-8 min-h-screen overflow-y-auto">
         <div className="max-w-7xl mx-auto h-full">
           {renderContent()}
         </div>
       </main>
 
-      <CreateDocumentModal 
+      <CreateDocumentModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         team={activeTeam}
