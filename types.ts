@@ -112,18 +112,6 @@ export interface TeamMember {
 
 export type RolePermissionMap = Record<UserRole, string[]>;
 
-export interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  company: string;
-  phone?: string;
-  address?: string;
-  tags: string[];
-  status: 'ACTIVE' | 'LEAD' | 'INACTIVE';
-  createdAt: string;
-  updatedAt: string;
-}
 
 export interface BulkGenJob {
   id: string;
@@ -144,6 +132,6 @@ export interface Team {
   assets: BrandAssets;
   templates: DocumentTemplate[];
   categories: Category[];
-  customers: Customer[];
+
   rolePermissions: RolePermissionMap;
 }

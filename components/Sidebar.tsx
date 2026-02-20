@@ -38,7 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const allNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'view_repo' },
     { id: 'knowledge', label: 'Repository', icon: BookOpen, perm: 'view_repo' },
-    { id: 'customers', label: 'Customers', icon: Database, perm: 'manage_customers' },
+
     { id: 'bulk', label: 'Bulk Production', icon: Layers, perm: 'generate_doc' },
     { id: 'brand', label: 'Brand Assets', icon: Palette, perm: 'edit_brand' },
     { id: 'team', label: 'Team Settings', icon: Users, perm: 'manage_team' },

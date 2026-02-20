@@ -5,13 +5,20 @@ export const hasPermission = (team: Team, role: UserRole, permissionId: string):
     if (role === UserRole.ADMIN) return true;
 
     const permissions: Record<UserRole, string[]> = {
-        [UserRole.ADMIN]: ['*'],
+        [UserRole.ADMIN]: [
+            'manage_team',
+            'edit_brand',
+            'manage_cats',
+            'upload_tmpl',
+            'generate_doc',
+            'view_repo'
+        ],
         [UserRole.EDITOR]: [
+            'manage_cats',
             'view_repo',
             'generate_doc',
             'edit_brand',
-            'upload_tmpl',
-            'manage_customers'
+            'upload_tmpl'
         ],
         [UserRole.MEMBER]: [
             'view_repo',

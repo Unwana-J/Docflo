@@ -11,7 +11,7 @@ import TemplateUpload from './views/TemplateUpload';
 import DocumentGenerator from './views/DocumentGenerator';
 import Repository from './views/KnowledgeBase';
 import Settings from './views/Settings';
-import CustomerDatabase from './views/CustomerDatabase';
+
 import BulkGenerator from './views/BulkGenerator';
 import CreateDocumentModal from './components/CreateDocumentModal';
 
@@ -106,17 +106,6 @@ const App: React.FC = () => {
             onUpdateTeam={handleUpdateTeam}
             onTemplateClick={handleTemplateClick}
             onAddNewTemplate={() => setActiveView('upload')}
-          />
-        );
-      case 'customers':
-        if (!can('manage_customers')) {
-          setActiveView('dashboard');
-          return null;
-        }
-        return (
-          <CustomerDatabase
-            activeTeam={activeTeam}
-            onUpdateTeam={handleUpdateTeam}
           />
         );
       case 'bulk':
