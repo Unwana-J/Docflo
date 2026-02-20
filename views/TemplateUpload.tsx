@@ -406,7 +406,9 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel, a
                       type: FieldType.TEXT,
                       category: FieldCategory.DYNAMIC,
                       required: true,
-                      pageIndex: currentPage - 1
+                      pageIndex: currentPage - 1,
+                      rect: { ymin: 100, xmin: 100, ymax: 150, xmax: 400 }, // Default position (top-left)
+                      style: { fontSize: '1.2vw', color: '#ef4444', fontWeight: 'bold' } // Red to stand out
                     };
                     setTemplateData(prev => ({ ...prev, fields: [...(prev.fields || []), newField] }));
                   }}
