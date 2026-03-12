@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Archive, FileText, Search, Plus, Filter, ChevronRight,
-  Clock, Star, Download, MoreHorizontal, Tag
+  Archive, Search, Plus, ChevronRight, Clock, Tag
 } from 'lucide-react';
 import { DocumentTemplate, Team } from '../types';
 
@@ -11,11 +10,12 @@ interface TemplateRepositoryProps {
   onNewTemplate: () => void;
 }
 
-const categories = ['All', 'Legal', 'Finance', 'HR', 'Sales', 'Operations', 'General'];
-
 const TemplateRepository: React.FC<TemplateRepositoryProps> = ({ activeTeam, onTemplateClick, onNewTemplate }) => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+
+  // Use the workspace's own custom categories
+  const categoryTabs = ['All', ...(activeTeam.categories || [])];
 
   const filtered = activeTeam.templates.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -53,7 +53,7 @@ const TemplateRepository: React.FC<TemplateRepositoryProps> = ({ activeTeam, onT
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {categories.map(cat => (
+          {categoryTabs.map(cat => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}

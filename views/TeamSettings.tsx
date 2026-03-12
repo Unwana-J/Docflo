@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   Users, Copy, Check, Mail, ShieldCheck, ShieldAlert,
-  Crown, UserCheck, UserX, Plus, Search
+  Crown, UserCheck, UserX, Search, Plus, X, Tag
 } from 'lucide-react';
 import { Team, UserRole } from '../types';
 
 interface TeamSettingsProps {
   activeTeam: Team;
+  onUpdateCategories: (categories: string[]) => void;
 }
 
 const roleColors: Record<UserRole, string> = {
@@ -21,15 +22,28 @@ const roleIcons: Record<UserRole, React.ReactNode> = {
   [UserRole.MEMBER]: <UserCheck className="w-3.5 h-3.5" />
 };
 
-const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam }) => {
+const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam, onUpdateCategories }) => {
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
   const mockInviteLink = `https://docuflow.app/invite/inv_${activeTeam.id.slice(-6)}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(mockInviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const addCategory = () => {
+    const trimmed = newCategory.trim();
+    if (trimmed && !activeTeam.categories.includes(trimmed)) {
+      onUpdateCategories([...activeTeam.categories, trimmed]);
+      setNewCategory('');
+    }
+  };
+
+  const removeCategory = (cat: string) => {
+    onUpdateCategories(activeTeam.categories.filter(c => c !== cat));
   };
 
   const filteredMembers = activeTeam.members.filter(m =>
@@ -42,7 +56,10 @@ const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam }) => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Team Settings</h1>
-        <p className="text-slate-500 mt-1">Manage members and access for <span className="font-bold text-slate-700">{activeTeam.name}</span></p>
+        <p className="text-slate-500 mt-1">
+          Manage members and access for <span className="font-bold text-slate-700">{activeTeam.name}</span>
+          <span className="ml-2 px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-xs font-bold">{activeTeam.workspaceType}</span>
+        </p>
       </div>
 
       {/* Stats row */}
@@ -64,6 +81,47 @@ const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam }) => {
         ))}
       </div>
 
+      {/* Category Manager */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Tag className="w-5 h-5 text-blue-500" /> Template Categories
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">These categories appear in your Template Repository filter. Add or remove to match your workflow.</p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex flex-wrap gap-2 min-h-[44px]">
+            {activeTeam.categories.map(cat => (
+              <span key={cat} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-sm font-bold">
+                {cat}
+                <button onClick={() => removeCategory(cat)} className="hover:text-red-500 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ))}
+            {activeTeam.categories.length === 0 && <p className="text-slate-300 text-sm italic">No categories yet.</p>}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newCategory}
+              onChange={e => setNewCategory(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addCategory()}
+              placeholder="Add new category…"
+              className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={addCategory}
+              disabled={!newCategory.trim()}
+              className="px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-40 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Members + Invite */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Members list */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -80,7 +138,6 @@ const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam }) => {
               />
             </div>
           </div>
-
           <div className="divide-y divide-slate-100">
             {filteredMembers.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
@@ -115,11 +172,9 @@ const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam }) => {
               <Plus className="w-5 h-5 text-emerald-500" /> Invite Members
             </h2>
             <p className="text-sm text-slate-500">Share this link to invite collaborators. New joiners will require admin approval before they get full access.</p>
-
             <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-mono text-xs text-slate-600 break-all">
               {mockInviteLink}
             </div>
-
             <button
               onClick={handleCopy}
               className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${
@@ -134,11 +189,11 @@ const TeamSettings: React.FC<TeamSettingsProps> = ({ activeTeam }) => {
 
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
             <div className="flex gap-3">
-               <ShieldAlert className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-               <div>
-                 <p className="font-bold text-amber-800 text-sm">Pending Approval</p>
-                 <p className="text-xs text-amber-700 mt-1">Collaborators who join via invite have <strong>read-only</strong> access until an Admin approves them.</p>
-               </div>
+              <ShieldAlert className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-800 text-sm">Pending Approval</p>
+                <p className="text-xs text-amber-700 mt-1">Collaborators who join via invite have <strong>read-only</strong> access until an Admin approves them.</p>
+              </div>
             </div>
           </div>
         </div>

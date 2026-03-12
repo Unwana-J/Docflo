@@ -20,6 +20,8 @@ const App: React.FC = () => {
   // ─── Onboarding state ───────────────────────────────────────────────────────
   const [stage, setStage] = useState<AppStage>('signup');
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [newWorkspaceType, setNewWorkspaceType] = useState('');
+  const [newCategories, setNewCategories] = useState<string[]>([]);
 
   // ─── App state ───────────────────────────────────────────────────────────────
   const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
@@ -38,8 +40,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateWorkspace = (name: string) => {
+  const handleCreateWorkspace = (name: string, type: string, cats: string[]) => {
     setNewWorkspaceName(name);
+    setNewWorkspaceType(type);
+    setNewCategories(cats);
     setStage('brand_setup');
   };
 
@@ -48,6 +52,8 @@ const App: React.FC = () => {
       id: `team-${Date.now()}`,
       name: newWorkspaceName,
       type: 'WORKSPACE',
+      workspaceType: newWorkspaceType || 'General',
+      categories: newCategories.length ? newCategories : ['General'],
       members: [],
       assets,
       templates: []
@@ -70,6 +76,12 @@ const App: React.FC = () => {
   const handleTemplateClick = (template: DocumentTemplate) => {
     setSelectedTemplate(template);
     setActiveView('generate');
+  };
+
+  const handleUpdateCategories = (categories: string[]) => {
+    setTeams(prev => prev.map(team =>
+      team.id === activeTeamId ? { ...team, categories } : team
+    ));
   };
 
   // ─── Onboarding stages ───────────────────────────────────────────────────────
@@ -124,7 +136,7 @@ const App: React.FC = () => {
       case 'knowledge':
         return <KnowledgeBase />;
       case 'team':
-        return <TeamSettings activeTeam={activeTeam} />;
+        return <TeamSettings activeTeam={activeTeam} onUpdateCategories={handleUpdateCategories} />;
       case 'brand':
         return (
           <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">

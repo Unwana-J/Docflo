@@ -45,6 +45,8 @@ export interface Team {
   id: string;
   name: string;
   type: 'PERSONAL' | 'WORKSPACE';
+  workspaceType: string;   // e.g. "Project Management", "Legal", "HR"
+  categories: string[];    // user-defined template categories
   members: Array<{
     id: string;
     email: string;

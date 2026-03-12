@@ -6,6 +6,8 @@ export const INITIAL_TEAMS: Team[] = [
     id: 'team-1',
     name: 'Legal Department',
     type: 'WORKSPACE',
+    workspaceType: 'Legal',
+    categories: ['Contracts', 'NDAs', 'Compliance', 'Litigation'],
     members: [
       { id: 'u1', name: 'Alex Johnson', email: 'alex@company.com', role: UserRole.ADMIN },
       { id: 'u2', name: 'Sarah Miller', email: 'sarah@company.com', role: UserRole.EDITOR }
@@ -21,7 +23,7 @@ export const INITIAL_TEAMS: Team[] = [
         id: 'tmpl-1',
         name: 'Standard NDA',
         description: 'Mutual non-disclosure agreement for external partners.',
-        category: 'Legal',
+        category: 'NDAs',
         content: `NON-DISCLOSURE AGREEMENT
         
         This Agreement is entered into as of {{AgreementDate}} between {{PartyA}} and {{PartyB}}.
@@ -50,6 +52,8 @@ export const INITIAL_TEAMS: Team[] = [
     id: 'team-2',
     name: 'Personal Space',
     type: 'PERSONAL',
+    workspaceType: 'General',
+    categories: ['Documents', 'Reports', 'Notes'],
     members: [
       { id: 'u1', name: 'Alex Johnson', email: 'alex@company.com', role: UserRole.ADMIN }
     ],
