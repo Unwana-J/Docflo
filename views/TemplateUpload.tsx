@@ -1,474 +1,501 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  Upload,
-  X,
-  Sparkles,
-  ChevronRight,
-  ChevronLeft,
-  AlertCircle,
-  Loader2,
-  FileText,
-  MousePointer2,
-  Monitor,
-  Layout,
-  CheckCircle2,
-  Undo2,
-  Save,
-  Trash2,
-  Eye,
-  Plus
-} from 'lucide-react';
-import { Team, DocumentTemplate, TemplateField, FieldType, FieldCategory, BoundingBox, FieldStyle } from '../types';
-import { detectTemplateFields } from '../services/geminiService';
-import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+import React, { useState, useMemo } from 'react';
+import { 
+  Upload, 
+  FileUp, 
+  Loader2, 
+  CheckCircle2, 
+  X, 
+  Settings2, 
+  AlertCircle, 
+  Sparkles, 
+  Type as TypeIcon, 
+  Calendar, 
+  Hash, 
+  ChevronDown, 
+  FileText,
+  Eye,
+  Maximize2,
+  Trash2,
+  Plus,
+  FileCode
+} from 'lucide-react';
+import { detectTemplateFields } from '../services/geminiService';
+import { TemplateField, FieldType, DocumentTemplate } from '../types';
+
+// PDF and DOCX processing
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
 
 interface TemplateUploadProps {
   onComplete: (template: DocumentTemplate) => void;
   onCancel: () => void;
-  activeTeam: Team;
 }
 
-const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel, activeTeam }) => {
-  const [step, setStep] = useState(1);
-  const [isUploading, setIsUploading] = useState(false);
+type UploadStep = 'upload' | 'preview' | 'scanning' | 'refine';
+
+const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel }) => {
+  const [step, setStep] = useState<UploadStep>('upload');
+  const [fileContent, setFileContent] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [fields, setFields] = useState<TemplateField[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
+  const [hoveredField, setHoveredField] = useState<string | null>(null);
 
-  const [templateData, setTemplateData] = useState<Partial<DocumentTemplate>>({
-    name: '',
-    description: '',
-    category: 'Sales',
-    tags: [],
-    fields: []
-  });
+  const [pendingFile, setPendingFile] = useState<{
+    data?: string;
+    text?: string;
+    html?: string;
+    blobUrl?: string;
+    type: string;
+    name: string;
+    size: number;
+    isGeneratingPreview?: boolean;
+  } | null>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
-  const renderPage = useCallback(async (pageNum: number, pdf: pdfjsLib.PDFDocumentProxy) => {
-    if (!canvasRef.current) return;
-    try {
-      const page = await pdf.getPage(pageNum);
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!context) return;
+  const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
 
-      const viewport = page.getViewport({ scale: 2.0 });
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
-
-      setPreviewUrl(canvas.toDataURL('image/png'));
-    } catch (err) {
-      console.error("PDF Render Error:", err);
-      setError("Failed to render PDF page.");
-    }
-  }, []);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    if (selectedFile.type !== 'application/pdf' && !selectedFile.type.startsWith('image/')) {
-      setError('Please upload a PDF or an image file.');
-      return;
-    }
-
-    setFile(selectedFile);
     setError(null);
-    setIsUploading(true);
+    setStep('preview');
+    setPendingFile({ type: file.type, name: file.name, size: file.size, isGeneratingPreview: true });
 
     try {
-      if (selectedFile.type === 'application/pdf') {
-        const arrayBuffer = await selectedFile.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
-        setPdfDoc(pdf);
-        setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-        await renderPage(1, pdf);
+      const isPdf = file.type === 'application/pdf';
+      const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const isImage = file.type.startsWith('image/');
+      
+      let data: string | undefined;
+      let text: string | undefined;
+      let html: string | undefined;
+      let blobUrl: string | undefined;
+
+      if (isPdf) {
+        blobUrl = URL.createObjectURL(file);
+        data = await readFileAsBase64(file);
+      } else if (isDocx) {
+        const buffer = await readFileAsArrayBuffer(file);
+        const textResult = await mammoth.extractRawText({ arrayBuffer: buffer });
+        const htmlResult = await mammoth.convertToHtml({ arrayBuffer: buffer });
+        text = textResult.value;
+        html = htmlResult.value;
+        data = await readFileAsBase64(file);
+      } else if (isImage) {
+        blobUrl = URL.createObjectURL(file);
+        data = await readFileAsBase64(file);
       } else {
-        const url = URL.createObjectURL(selectedFile);
-        setPreviewUrl(url);
-        setPdfDoc(null);
-        setTotalPages(1);
+        const reader = new FileReader();
+        text = await new Promise((res) => {
+          reader.onload = () => res(reader.result as string);
+          reader.readAsText(file);
+        });
       }
-      setStep(2);
-    } catch (err) {
-      setError('Error loading file. Please try again.');
-    } finally {
-      setIsUploading(false);
+
+      setPendingFile({
+        data,
+        text,
+        html,
+        blobUrl,
+        type: file.type,
+        name: file.name,
+        size: file.size,
+        isGeneratingPreview: false
+      });
+    } catch (err: any) {
+      setError('Failed to read file.');
+      setStep('upload');
     }
   };
 
-  const handleAIDetect = async () => {
-    if (!previewUrl) return;
-    setIsUploading(true);
+  const startAnalysis = async () => {
+    if (!pendingFile) return;
+    setLoading(true);
+    setIsRetrying(false);
+    setRetryAttempt(0);
     setError(null);
+    setStep('scanning');
 
     try {
-      // Use the previewUrl (which is the current page as PNG for PDFs)
-      const base64Data = previewUrl.split(',')[1];
-      const result = await detectTemplateFields(base64Data, 'image/png');
-
-      const newFields: TemplateField[] = result.fields.map((f: any, idx: number) => ({
-        id: `field-${Date.now()}-${idx}`,
-        name: f.variableName || f.name,
-        type: (f.type as FieldType) || FieldType.TEXT,
-        category: FieldCategory.DYNAMIC,
-        required: true,
-        rect: f.rect,
-        style: f.style,
-        pageIndex: currentPage - 1
-      }));
-
-      setTemplateData(prev => ({
-        ...prev,
-        name: prev.name || result.suggestedTitle,
-        fields: [...(prev.fields || []), ...newFields]
-      }));
-      setStep(3);
+      const result = await detectTemplateFields(
+        pendingFile.data, 
+        pendingFile.type, 
+        pendingFile.text,
+        (attempt: number) => {
+          setIsRetrying(true);
+          setRetryAttempt(attempt);
+        }
+      );
+      setFileContent(result.processedContent);
+      setFields(result.fields);
+      setTemplateName(result.suggestedTitle);
+      setStep('refine');
     } catch (err: any) {
-      setError(err.message || "AI Analysis failed.");
+      setError(err.message || 'AI analysis failed.');
+      setIsRetrying(false);
+      // Wait for user to hit "Try again" manually, or cancel
     } finally {
-      setIsUploading(false);
+      if (!error) setLoading(false);
     }
   };
 
-  const handleSaveTemplate = () => {
-    if (!templateData.name) {
-      setError("Template name is required.");
-      return;
-    }
+  // Logic to inject interactive styles into the AI-generated HTML
+  const refinedHtml = useMemo(() => {
+    let html = fileContent;
+    fields.forEach(field => {
+      const isHovered = hoveredField === field.id;
+      const highlightClass = isHovered 
+        ? 'bg-blue-600 text-white shadow-xl scale-110 ring-4 ring-blue-500/20' 
+        : 'bg-blue-100 text-blue-700 border-blue-200';
+      
+      const placeholder = `{{${field.name}}}`;
+      // Use a more complex replacement to handle potential HTML within the AI response
+      const replacement = `<span class="inline-block px-2 py-0.5 rounded-md font-bold transition-all duration-300 border ${highlightClass}" data-field-id="${field.id}">[${field.name}]</span>`;
+      
+      // Escape for regex and replace
+      const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      html = html.replace(new RegExp(escaped, 'g'), replacement);
+    });
+    return html;
+  }, [fileContent, fields, hoveredField]);
 
-    const newTemplate: DocumentTemplate = {
-      id: `tpl-${Date.now()}`,
-      name: templateData.name || 'Untitled',
-      description: templateData.description || '',
-      category: templateData.category || 'Other',
-      tags: templateData.tags || [],
-      content: '', // In a real app, this would be the master template storage
-      fidelityImage: previewUrl || '',
-      fields: templateData.fields || [],
+  const updateField = (id: string, updates: Partial<TemplateField>) => {
+    setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
+  };
+
+  const removeField = (id: string) => {
+    setFields(fields.filter(f => f.id !== id));
+  };
+
+  const addFieldManually = () => {
+    const newField: TemplateField = {
+      id: `field-manual-${Date.now()}`,
+      name: `NewVariable${fields.length + 1}`,
+      type: FieldType.TEXT,
+      required: true
+    };
+    setFields([...fields, newField]);
+  };
+
+  const saveTemplate = () => {
+    onComplete({
+      id: `tmpl-${Date.now()}`,
+      name: templateName,
+      description: 'AI-generated template from document import.',
+      category: 'General',
+      content: fileContent,
+      fields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      version: 1,
-      history: [{
-        id: `v1-${Date.now()}`,
-        version: '1.0',
-        date: new Date().toISOString(),
-        author: 'System',
-        changes: 'Initial creation via AI'
-      }]
-    };
+      version: 1
+    });
+  };
 
-    onComplete(newTemplate);
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + ['B', 'KB', 'MB', 'GB'][i];
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <button
-            onClick={onCancel}
-            className="group flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors mb-4 font-black text-[10px] uppercase tracking-widest"
-          >
-            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Back to Workspace
-          </button>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Initialize Intelligence</h2>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Template Workshop</h2>
+          <p className="text-slate-500 font-medium">Full high-fidelity document layout reconstruction</p>
         </div>
-
-        <div className="flex items-center gap-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className={`flex items-center gap-2`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${step >= i ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                {step > i ? <CheckCircle2 className="w-4 h-4" /> : i}
-              </div>
-              {i < 3 && <div className={`w-8 h-0.5 ${step > i ? 'bg-blue-600' : 'bg-slate-100'}`} />}
-            </div>
-          ))}
-        </div>
+        <button onClick={onCancel} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
+          <X className="w-6 h-6" />
+        </button>
       </div>
 
-      <canvas ref={canvasRef} className="hidden" />
-
-      {error && (
-        <div className="bg-red-50 border-2 border-red-100 text-red-600 p-6 rounded-[2rem] flex items-center gap-4 animate-in shake duration-500 shadow-sm">
-          <AlertCircle className="w-6 h-6 flex-shrink-0" />
-          <p className="font-black text-xs uppercase tracking-widest">{error}</p>
-        </div>
-      )}
-
-      {step === 1 && (
-        <div className="bg-white border-2 border-slate-100 rounded-[3rem] p-20 text-center space-y-8 shadow-sm hover:border-blue-600 transition-all group">
-          <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto group-hover:bg-blue-600 group-hover:text-white transition-all group-hover:rotate-6">
+      {step === 'upload' && (
+        <div className="bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] p-32 text-center hover:border-blue-400 hover:bg-blue-50/10 group transition-all duration-300">
+          <div className="bg-blue-600 text-white w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-10 shadow-2xl group-hover:scale-105 transition-transform">
             <Upload className="w-12 h-12" />
           </div>
-          <div className="space-y-4">
-            <h3 className="text-3xl font-black text-slate-900 tracking-tight">Ingest Master Document</h3>
-            <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">Upload a high-fidelity PDF or Image. Our AI will analyze the structure to identify dynamic variables and branding nodes.</p>
-          </div>
-          <div className="relative pt-4">
-            <input
-              type="file"
-              onChange={handleFileChange}
-              accept=".pdf,image/*"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-            <button className="px-12 py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl flex items-center gap-3 mx-auto">
-              {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />} Selection Master
-            </button>
-          </div>
+          <h3 className="text-4xl font-black mb-4 text-slate-900">Drop your file here</h3>
+          <p className="text-slate-400 mb-12 max-w-lg mx-auto text-xl font-medium leading-relaxed">
+            Upload Word, PDF, or Images. We'll reconstruct the full visual design, including colors and typography.
+          </p>
+          <input type="file" id="file-upload" className="hidden" accept=".docx,.pdf,.txt,image/*" onChange={handleFileUpload} />
+          <label htmlFor="file-upload" className="inline-flex items-center gap-4 bg-slate-900 text-white px-12 py-6 rounded-2xl font-bold cursor-pointer hover:bg-slate-800 shadow-2xl transition-all active:scale-95">
+            <FileUp className="w-7 h-7" /> Choose File
+          </label>
         </div>
       )}
 
-      {step === 2 && previewUrl && (
+      {step === 'preview' && pendingFile && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-12">
-            <div className="bg-slate-900 rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600 opacity-20 blur-3xl -translate-y-1/2 translate-x-1/2" />
-              <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-                <div className="w-full md:w-1/3 bg-white/5 border border-white/10 rounded-[2rem] p-2 aspect-[3/4] overflow-hidden relative group">
-                  <img src={previewUrl} className="w-full h-full object-cover rounded-[1.5rem]" alt="Template Preview" />
-                  {totalPages > 1 && (
-                    <div className="absolute bottom-6 inset-x-6 flex items-center justify-between">
-                      <button
-                        onClick={() => {
-                          const prev = Math.max(1, currentPage - 1);
-                          setCurrentPage(prev);
-                          if (pdfDoc) renderPage(prev, pdfDoc);
-                        }}
-                        disabled={currentPage === 1}
-                        className="p-2 bg-black/50 backdrop-blur-xl rounded-xl hover:bg-black/70 disabled:opacity-30"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <span className="text-[10px] font-black uppercase tracking-widest bg-black/50 backdrop-blur-xl px-3 py-1.5 rounded-lg">Page {currentPage} / {totalPages}</span>
-                      <button
-                        onClick={() => {
-                          const next = Math.min(totalPages, currentPage + 1);
-                          setCurrentPage(next);
-                          if (pdfDoc) renderPage(next, pdfDoc);
-                        }}
-                        disabled={currentPage === totalPages}
-                        className="p-2 bg-black/50 backdrop-blur-xl rounded-xl hover:bg-black/70 disabled:opacity-30"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+              <h3 className="text-xl font-black flex items-center gap-3 text-blue-600 uppercase tracking-tight">
+                <FileCode className="w-6 h-6" /> Source File
+              </h3>
+              <div className="space-y-4">
+                <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Filename</p>
+                   <p className="font-bold text-slate-900 truncate">{pendingFile.name}</p>
                 </div>
-                <div className="flex-1 space-y-8">
-                  <div className="space-y-4">
-                    <span className="text-blue-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2"><Sparkles className="w-5 h-5" /> Intelligence Ready</span>
-                    <h3 className="text-4xl font-black tracking-tight leading-tight">Proceed with AI Variable Extraction?</h3>
-                    <p className="text-white/50 text-lg font-medium leading-relaxed max-w-xl">DocuFlow AI will scan the current page of the document to identify dynamic input zones, typography styles, and branding constraints.</p>
-                  </div>
-                  <div className="flex items-center gap-6 pt-4">
-                    <button
-                      onClick={handleAIDetect}
-                      disabled={isUploading}
-                      className="px-10 py-5 bg-white text-slate-900 rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-2xl flex items-center gap-3 disabled:opacity-50"
-                    >
-                      {isUploading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Eye className="w-5 h-5 text-blue-600" />}
-                      Run Full Analysis
-                    </button>
-                    <button
-                      onClick={() => setStep(3)}
-                      className="text-white/40 hover:text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-colors"
-                    >
-                      Manual Setup <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Details</p>
+                   <p className="font-bold text-slate-900">{formatSize(pendingFile.size)} • {pendingFile.type.split('/')[1]?.toUpperCase()}</p>
                 </div>
               </div>
             </div>
+            
+            <button 
+              onClick={startAnalysis} 
+              className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-4 text-xl hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Sparkles className="w-8 h-8" /> Reconstruct Layout
+            </button>
+            <button onClick={() => setStep('upload')} className="w-full text-slate-400 font-bold py-2 hover:text-slate-600 transition-colors uppercase text-xs tracking-widest">Swap File</button>
+          </div>
+          
+          <div className="lg:col-span-8 bg-slate-200 rounded-[3rem] border-8 border-slate-100 h-[700px] flex flex-col overflow-hidden shadow-inner">
+             <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <span className="font-black text-xs text-slate-400 uppercase tracking-[0.2em]">Original Visual View</span>
+                <Maximize2 className="w-4 h-4 text-slate-300" />
+             </div>
+             <div className="flex-1 overflow-auto bg-slate-200/50 p-12">
+                {pendingFile.isGeneratingPreview ? (
+                  <div className="h-full flex flex-col items-center justify-center">
+                    <Loader2 className="animate-spin text-blue-500 w-16 h-16 mb-6" />
+                    <p className="text-slate-400 font-black uppercase tracking-widest">Loading Document...</p>
+                  </div>
+                ) : (
+                  <div className="bg-white min-h-full w-full max-w-[800px] mx-auto shadow-2xl p-16 border border-slate-300 rounded-sm">
+                    {pendingFile.blobUrl && pendingFile.type === 'application/pdf' ? (
+                      <embed src={pendingFile.blobUrl} className="w-full h-[1000px]" type="application/pdf" />
+                    ) : pendingFile.html ? (
+                      <div className="prose prose-slate max-w-none font-serif leading-relaxed" dangerouslySetInnerHTML={{ __html: pendingFile.html }} />
+                    ) : pendingFile.blobUrl && pendingFile.type.startsWith('image/') ? (
+                      <img src={pendingFile.blobUrl} className="w-full h-auto rounded shadow-lg" />
+                    ) : (
+                      <div className="whitespace-pre-wrap font-serif text-lg text-slate-800 leading-[1.8]">{pendingFile.text}</div>
+                    )}
+                  </div>
+                )}
+             </div>
           </div>
         </div>
       )}
 
-      {step === 3 && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-8 space-y-8">
-            <div className="bg-white border-2 border-slate-100 rounded-[3rem] p-12 shadow-sm space-y-8">
-              <div className="flex items-center justify-between pb-8 border-b border-slate-50">
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Template Identity</h3>
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                  <CheckCircle2 className="w-3 h-3" /> Core Confirmed
-                </div>
-              </div>
+      {step === 'scanning' && (
+        <div className="bg-white rounded-[4rem] border border-slate-100 p-40 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-50 overflow-hidden">
+            <div className="h-full bg-blue-600 animate-[loading-bar_2s_ease-in-out_infinite]" style={{width: '40%'}} />
+          </div>
+          <div className="relative w-32 h-32 mx-auto mb-12">
+            <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-25" />
+            <div className="relative w-32 h-32 bg-blue-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl transform rotate-12">
+              <Sparkles className="w-16 h-16 text-white animate-pulse" />
+            </div>
+          </div>
+          <h3 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">
+            {isRetrying ? `AI rate limit detected (Retry #${retryAttempt})...` : 'AI Layout Reconstruction...'}
+          </h3>
+          <p className="text-slate-400 max-w-md mx-auto text-xl font-medium leading-relaxed">
+            {isRetrying 
+              ? 'AI is processing, please wait... we are safely retrying your request to ensure quality.'
+              : 'Gemini is analyzing the original colors, typography, and structural design to build a high-fidelity template.'}
+          </p>
+        </div>
+      )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Master Name</label>
-                  <input
-                    type="text"
-                    value={templateData.name}
-                    onChange={(e) => setTemplateData(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 font-black text-slate-900 focus:bg-white focus:border-blue-600 transition-all focus:outline-none"
-                    placeholder="e.g. Q1 Workshop Contract"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Classification</label>
-                  <select
-                    value={templateData.category}
-                    onChange={(e) => setTemplateData(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 font-black text-slate-900 focus:bg-white focus:border-blue-600 transition-all focus:outline-none appearance-none"
-                  >
-                    <option>Sales</option>
-                    <option>Finance</option>
-                    <option>HR</option>
-                    <option>Operations</option>
-                    <option>Legal</option>
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Brief Description</label>
-                <textarea
-                  value={templateData.description}
-                  onChange={(e) => setTemplateData(prev => ({ ...prev, description: e.target.value }))}
-                  rows={3}
-                  className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 font-medium text-slate-700 focus:bg-white focus:border-blue-600 transition-all focus:outline-none resize-none"
-                  placeholder="State the purpose of this intelligence module..."
+      {step === 'refine' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          <div className="lg:col-span-8 bg-slate-200 rounded-[3rem] border-8 border-slate-100 overflow-hidden shadow-inner h-[800px] flex flex-col relative">
+            <div className="p-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
+               <div className="flex items-center gap-4">
+                 <div className="flex gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-slate-300" />
+                    <div className="w-3 h-3 rounded-full bg-slate-300" />
+                    <div className="w-3 h-3 rounded-full bg-slate-300" />
+                 </div>
+                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-mono">Fidelity Template Preview</span>
+               </div>
+               <div className="flex items-center gap-2 bg-blue-600/10 px-4 py-1.5 rounded-full border border-blue-600/20">
+                 <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shadow-[0_0_8px_rgba(37,99,235,0.6)]" />
+                 <span className="text-[10px] text-blue-600 font-black uppercase tracking-tight">Design Elements Captured</span>
+               </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-12 custom-scrollbar flex justify-center bg-slate-300/30">
+              <div className="bg-white w-full max-w-[850px] shadow-2xl min-h-[1100px] border border-slate-300 rounded-sm relative p-2">
+                <div 
+                  className="p-16 h-full w-full"
+                  dangerouslySetInnerHTML={{ __html: refinedHtml }}
+                  onMouseOver={(e) => {
+                    const target = e.target as HTMLElement;
+                    const fieldId = target.closest('[data-field-id]')?.getAttribute('data-field-id');
+                    if (fieldId) setHoveredField(fieldId);
+                  }}
+                  onMouseOut={() => setHoveredField(null)}
                 />
               </div>
             </div>
-
-            <div className="bg-white border-2 border-slate-100 rounded-[3rem] p-12 shadow-sm space-y-8">
-              <div className="flex items-center justify-between pb-8 border-b border-slate-50">
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Detected Variables</h3>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-1 bg-slate-50 rounded-full">{templateData.fields?.length || 0} Dynamic Nodes</span>
-              </div>
-
-              <div className="space-y-4">
-                {templateData.fields?.map((field, idx) => (
-                  <div key={field.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-blue-50/20 transition-all group">
-                    <div className="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-blue-600 font-black text-xs">
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-6">
-                      <input
-                        type="text"
-                        value={field.name}
-                        onChange={(e) => {
-                          const updated = [...(templateData.fields || [])];
-                          updated[idx].name = e.target.value;
-                          setTemplateData(prev => ({ ...prev, fields: updated }));
-                        }}
-                        className="bg-transparent font-black text-slate-900 focus:outline-none focus:text-blue-600"
-                      />
-                      <select
-                        value={field.type}
-                        onChange={(e) => {
-                          const updated = [...(templateData.fields || [])];
-                          updated[idx].type = e.target.value as FieldType;
-                          setTemplateData(prev => ({ ...prev, fields: updated }));
-                        }}
-                        className="bg-transparent text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer"
-                      >
-                        <option value={FieldType.TEXT}>Text</option>
-                        <option value={FieldType.DATE}>Date</option>
-                        <option value={FieldType.NUMBER}>Number</option>
-                      </select>
-                      <div className="hidden md:flex items-center gap-2 text-[9px] font-black text-slate-300 uppercase">
-                        Page {(field.pageIndex || 0) + 1}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const updated = templateData.fields?.filter(f => f.id !== field.id);
-                        setTemplateData(prev => ({ ...prev, fields: updated }));
-                      }}
-                      className="p-2 text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() => {
-                    const newField: TemplateField = {
-                      id: `manual-${Date.now()}`,
-                      name: 'new_variable',
-                      type: FieldType.TEXT,
-                      category: FieldCategory.DYNAMIC,
-                      required: true,
-                      pageIndex: currentPage - 1,
-                      rect: { ymin: 100, xmin: 100, ymax: 150, xmax: 400 }, // Default position (top-left)
-                      style: { fontSize: '1.2vw', color: '#ef4444', fontWeight: 'bold' } // Red to stand out
-                    };
-                    setTemplateData(prev => ({ ...prev, fields: [...(prev.fields || []), newField] }));
-                  }}
-                  className="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 font-black text-xs uppercase tracking-widest hover:border-blue-400 hover:text-blue-600 transition-all flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Add Manual Variable
-                </button>
-              </div>
-            </div>
           </div>
 
-          <div className="lg:col-span-4 space-y-8">
-            <div className="bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl space-y-8">
-              <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Actions</h4>
-              <div className="space-y-4">
-                <button
-                  onClick={handleSaveTemplate}
-                  className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-500 transition-all shadow-xl flex items-center justify-center gap-3"
+          <div className="lg:col-span-4 space-y-6 flex flex-col">
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-black text-slate-900 flex items-center gap-4">
+                  <Settings2 className="w-8 h-8 text-blue-600" /> Variables
+                </h3>
+                <button 
+                  onClick={addFieldManually}
+                  className="bg-slate-100 hover:bg-slate-900 hover:text-white p-3 rounded-2xl transition-all shadow-sm"
+                  title="Insert Field"
                 >
-                  <Save className="w-5 h-5" /> Deploy Template
-                </button>
-                <button
-                  onClick={() => {
-                    setStep(1);
-                    setFile(null);
-                    setPreviewUrl(null);
-                  }}
-                  className="w-full py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-3"
-                >
-                  <Undo2 className="w-5 h-5" /> Reset Module
+                  <Plus className="w-6 h-6" />
                 </button>
               </div>
 
-              <div className="pt-8 border-t border-white/5">
-                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-4">Integration Summary</p>
-                <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-xs font-medium text-white/70">
-                    <CheckCircle2 className="w-4 h-4 text-green-500" /> Multi-Page Navigation
-                  </li>
-                  <li className="flex items-center gap-3 text-xs font-medium text-white/70">
-                    <CheckCircle2 className="w-4 h-4 text-green-500" /> AI Style Recognition
-                  </li>
-                  <li className="flex items-center gap-3 text-xs font-medium text-white/70">
-                    <CheckCircle2 className="w-4 h-4 text-green-500" /> Branding Constraint Check
-                  </li>
-                </ul>
+              <div className="space-y-3 mb-8">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Template Identity</label>
+                <input 
+                  type="text" 
+                  value={templateName} 
+                  onChange={(e) => setTemplateName(e.target.value)} 
+                  className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 font-black text-slate-900 focus:ring-8 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none transition-all text-lg" 
+                />
               </div>
-            </div>
+              
+              <div className="flex-1 overflow-y-auto pr-2 space-y-5 custom-scrollbar">
+                {fields.map(field => (
+                  <div 
+                    key={field.id} 
+                    onMouseEnter={() => setHoveredField(field.id)}
+                    onMouseLeave={() => setHoveredField(null)}
+                    className={`p-6 rounded-[2rem] border-2 transition-all duration-400 relative group ${hoveredField === field.id ? 'bg-blue-50 border-blue-200 shadow-xl ring-4 ring-blue-500/5' : 'bg-slate-50 border-slate-100'}`}
+                  >
+                    <button 
+                      onClick={() => removeField(field.id)} 
+                      className="absolute -top-3 -right-3 bg-white border-2 border-slate-100 rounded-full p-2.5 text-slate-300 hover:text-red-500 shadow-2xl opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-90"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                    
+                    <div className="flex items-center gap-4 mb-5">
+                       <div className="p-3 bg-white rounded-2xl border-2 border-slate-50 text-blue-600 shadow-sm">
+                          {field.type === FieldType.DATE ? <Calendar className="w-5 h-5" /> : field.type === FieldType.NUMBER ? <Hash className="w-5 h-5" /> : <TypeIcon className="w-5 h-5" />}
+                       </div>
+                       <input 
+                        type="text" 
+                        value={field.name} 
+                        onChange={(e) => updateField(field.id, { name: e.target.value })} 
+                        className="bg-transparent border-none p-0 text-base font-black text-slate-900 focus:ring-0 w-full placeholder-slate-300" 
+                        placeholder="Tag name..." 
+                      />
+                    </div>
+                    
+                    <div className="flex gap-4">
+                      <select 
+                        value={field.type} 
+                        onChange={(e) => updateField(field.id, { type: e.target.value as FieldType })} 
+                        className="flex-1 bg-white border-2 border-slate-100 rounded-[1.25rem] px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                      >
+                        <option value={FieldType.TEXT}>PLAIN TEXT</option>
+                        <option value={FieldType.NUMBER}>NUMBER</option>
+                        <option value={FieldType.DATE}>DATE PICKER</option>
+                        <option value={FieldType.DROPDOWN}>SELECT LIST</option>
+                      </select>
+                      <label className="flex items-center gap-2 px-5 bg-white border-2 border-slate-100 rounded-[1.25rem] cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={field.required} 
+                          onChange={(e) => updateField(field.id, { required: e.target.checked })} 
+                          className="w-5 h-5 text-blue-600 rounded-lg border-slate-200 focus:ring-blue-500" 
+                        />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">REQ</span>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-            <div className="bg-white border-2 border-slate-100 rounded-[3rem] p-2 overflow-hidden shadow-sm">
-              <div className="p-6">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Preview</p>
-              </div>
-              <div className="aspect-[3/4] bg-slate-50 rounded-[2.5rem] overflow-hidden relative">
-                <img src={previewUrl || ''} className="w-full h-full object-cover" alt="Draft" />
-              </div>
+              <button 
+                onClick={saveTemplate} 
+                className="w-full bg-slate-900 text-white py-6 rounded-[2.25rem] font-black shadow-2xl hover:bg-blue-600 transition-all flex items-center justify-center gap-4 text-xl mt-6 group overflow-hidden relative"
+              >
+                <div className="absolute inset-0 bg-blue-600 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                <span className="relative flex items-center gap-4">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400" /> Save & Deploy Template
+                </span>
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {error && (
+        <div className="bg-red-50 border-4 border-red-100 p-8 rounded-[3rem] flex items-center justify-between gap-6 text-red-600 shadow-2xl animate-in slide-in-from-top-6 duration-400">
+          <div className="flex items-center gap-6">
+            <AlertCircle className="w-10 h-10 flex-shrink-0" />
+            <p className="font-black text-lg tracking-tight">{error}</p>
+          </div>
+          {step === 'scanning' && error.includes('Rate limit') && (
+            <button 
+              onClick={() => {
+                setError(null);
+                startAnalysis(); 
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl font-bold shadow-sm transition-all whitespace-nowrap"
+            >
+              Try Again
+            </button>
+          )}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes loading-bar {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(250%); }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(203, 213, 225, 0.6);
+          border-radius: 20px;
+          border: 3px solid transparent;
+          background-clip: content-box;
+        }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+          background: rgba(148, 163, 184, 0.8);
+          border: 3px solid transparent;
+          background-clip: content-box;
+        }
+      `}</style>
     </div>
   );
 };

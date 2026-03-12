@@ -1,20 +1,18 @@
 
 import React from 'react';
-import {
-  FileText,
-  Users,
-  Settings,
-  PlusCircle,
-  LayoutDashboard,
-  Archive,
-  Palette,
+import { 
+  FileText, 
+  Users, 
+  Settings, 
+  PlusCircle, 
+  LayoutDashboard, 
+  Archive, 
+  Palette, 
   BookOpen,
   ChevronRight,
-  Database,
-  Layers
+  SwitchCamera
 } from 'lucide-react';
-import { Team, TeamMember, UserRole } from '../types';
-import { hasPermission } from '../hooks/usePermission';
+import { Team } from '../types';
 
 interface SidebarProps {
   activeView: string;
@@ -22,29 +20,22 @@ interface SidebarProps {
   teams: Team[];
   activeTeam: Team;
   setActiveTeamId: (id: string) => void;
-  currentUser: TeamMember;
-  currentUserRole: UserRole;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({
-  activeView,
-  setActiveView,
-  teams,
-  activeTeam,
-  setActiveTeamId,
-  currentUser,
-  currentUserRole
+const Sidebar: React.FC<SidebarProps> = ({ 
+  activeView, 
+  setActiveView, 
+  teams, 
+  activeTeam, 
+  setActiveTeamId 
 }) => {
-  const allNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'view_repo' },
-    { id: 'knowledge', label: 'Repository', icon: BookOpen, perm: 'view_repo' },
-
-    { id: 'bulk', label: 'Bulk Production', icon: Layers, perm: 'generate_doc' },
-    { id: 'brand', label: 'Brand Assets', icon: Palette, perm: 'edit_brand' },
-    { id: 'team', label: 'Team Settings', icon: Users, perm: 'manage_team' },
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'templates', label: 'Templates', icon: Archive },
+    { id: 'brand', label: 'Brand Assets', icon: Palette },
+    { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
+    { id: 'team', label: 'Team Settings', icon: Users },
   ];
-
-  const navItems = allNavItems.filter(item => hasPermission(activeTeam, currentUserRole, item.perm));
 
   return (
     <div className="w-64 bg-slate-900 text-slate-300 h-screen flex flex-col fixed left-0 top-0 overflow-y-auto">
@@ -60,7 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           Current Workspace
         </label>
         <div className="relative group">
-          <select
+          <select 
             value={activeTeam.id}
             onChange={(e) => setActiveTeamId(e.target.value)}
             className="w-full bg-slate-800 border-none text-white rounded-lg py-2 px-3 appearance-none cursor-pointer focus:ring-2 focus:ring-blue-500 transition-all text-sm"
@@ -82,10 +73,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           <button
             key={item.id}
             onClick={() => setActiveView(item.id)}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${activeView === item.id
-              ? 'bg-blue-600 text-white shadow-lg'
-              : 'hover:bg-slate-800 hover:text-white'
-              }`}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium ${
+              activeView === item.id 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'hover:bg-slate-800 hover:text-white'
+            }`}
           >
             <item.icon className="w-5 h-5" />
             {item.label}
@@ -93,26 +85,26 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {hasPermission(activeTeam, currentUserRole, 'upload_tmpl') && (
-        <div className="p-4 border-t border-slate-800">
-          <button
-            onClick={() => setActiveView('upload')}
-            className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <PlusCircle className="w-4 h-4" />
-            New Template
-          </button>
-        </div>
-      )}
-
+      <div className="p-4 border-t border-slate-800">
+        <button 
+          onClick={() => setActiveView('upload')}
+          className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+        >
+          <PlusCircle className="w-4 h-4" />
+          New Template
+        </button>
+      </div>
+      
       <div className="p-4 mt-auto">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-xs">
-            {currentUser.name[0]}
-          </div>
+          <img 
+            src="https://picsum.photos/seed/user/32/32" 
+            className="w-8 h-8 rounded-full border border-slate-700"
+            alt="User"
+          />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{currentUser.name}</p>
-            <p className="text-xs text-slate-500 truncate">{currentUserRole}</p>
+            <p className="text-sm font-medium text-white truncate">Alex Johnson</p>
+            <p className="text-xs text-slate-500 truncate">Admin</p>
           </div>
         </div>
       </div>

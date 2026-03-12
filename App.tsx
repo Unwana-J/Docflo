@@ -1,67 +1,66 @@
 
-import React, { useState, useCallback } from 'react';
-import { FileText } from 'lucide-react';
+import React, { useState } from 'react';
 import { INITIAL_TEAMS } from './constants';
-import { Team, DocumentTemplate, Category } from './types';
+import { Team, DocumentTemplate, BrandAssets } from './types';
 import Sidebar from './components/Sidebar';
-import { usePermission } from './hooks/usePermission';
-import { UserRole } from './types';
 import Dashboard from './views/Dashboard';
 import TemplateUpload from './views/TemplateUpload';
 import DocumentGenerator from './views/DocumentGenerator';
-import Repository from './views/KnowledgeBase';
-import Settings from './views/Settings';
+import SignUp from './views/SignUp';
+import CreateWorkspace from './views/CreateWorkspace';
+import BrandSetup from './views/BrandSetup';
+import PendingDashboard from './views/PendingDashboard';
 
-import BulkGenerator from './views/BulkGenerator';
-import CreateDocumentModal from './components/CreateDocumentModal';
+type AppStage = 'signup' | 'create_workspace' | 'brand_setup' | 'pending_dashboard' | 'app';
 
 const App: React.FC = () => {
+  // ─── Onboarding state ───────────────────────────────────────────────────────
+  const [stage, setStage] = useState<AppStage>('signup');
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+
+  // ─── App state ───────────────────────────────────────────────────────────────
   const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
   const [activeTeamId, setActiveTeamId] = useState<string>(INITIAL_TEAMS[0].id);
   const [activeView, setActiveView] = useState<string>('dashboard');
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const activeTeam = teams.find(t => t.id === activeTeamId) || teams[0];
-  const currentUser = activeTeam.members[0]; // Assuming first member is current session for demo
-  const currentUserRole = currentUser?.role || UserRole.ADMIN;
-  const { can } = usePermission(activeTeam, currentUserRole);
 
-  const handleUpdateTeam = (updatedTeam: Team) => {
-    setTeams(prev => prev.map(t => t.id === updatedTeam.id ? updatedTeam : t));
+  // ─── Onboarding handlers ─────────────────────────────────────────────────────
+  const handleSignUp = (isPending: boolean) => {
+    if (isPending) {
+      setStage('pending_dashboard');
+    } else {
+      setStage('create_workspace');
+    }
   };
 
+  const handleCreateWorkspace = (name: string) => {
+    setNewWorkspaceName(name);
+    setStage('brand_setup');
+  };
+
+  const handleBrandSetupComplete = (assets: BrandAssets) => {
+    const newTeam: Team = {
+      id: `team-${Date.now()}`,
+      name: newWorkspaceName,
+      type: 'WORKSPACE',
+      members: [],
+      assets,
+      templates: []
+    };
+    setTeams(prev => [...prev, newTeam]);
+    setActiveTeamId(newTeam.id);
+    setStage('app');
+  };
+
+  // ─── App content handlers ────────────────────────────────────────────────────
   const handleTemplateUploadComplete = (newTemplate: DocumentTemplate) => {
-    setTeams(prev => prev.map(team => {
-      if (team.id !== activeTeamId) return team;
-
-      let updatedCategories = [...team.categories];
-      const categoryIndex = updatedCategories.findIndex(c => c.name === newTemplate.category);
-
-      if (categoryIndex === -1) {
-        const newCat: Category = {
-          id: `cat-${Date.now()}`,
-          name: newTemplate.category,
-          subCategories: newTemplate.subCategory ? [newTemplate.subCategory] : []
-        };
-        updatedCategories.push(newCat);
-      } else if (newTemplate.subCategory) {
-        const cat = updatedCategories[categoryIndex];
-        if (!cat.subCategories.includes(newTemplate.subCategory)) {
-          updatedCategories[categoryIndex] = {
-            ...cat,
-            subCategories: [...cat.subCategories, newTemplate.subCategory]
-          };
-        }
-      }
-
-      return {
-        ...team,
-        templates: [newTemplate, ...team.templates],
-        categories: updatedCategories
-      };
-    }));
-
+    setTeams(prev => prev.map(team =>
+      team.id === activeTeamId
+        ? { ...team, templates: [newTemplate, ...team.templates] }
+        : team
+    ));
     setActiveView('dashboard');
   };
 
@@ -70,6 +69,21 @@ const App: React.FC = () => {
     setActiveView('generate');
   };
 
+  // ─── Onboarding stages ───────────────────────────────────────────────────────
+  if (stage === 'signup') {
+    return <SignUp onComplete={handleSignUp} />;
+  }
+  if (stage === 'create_workspace') {
+    return <CreateWorkspace onComplete={handleCreateWorkspace} />;
+  }
+  if (stage === 'brand_setup') {
+    return <BrandSetup workspaceName={newWorkspaceName} onComplete={handleBrandSetupComplete} />;
+  }
+  if (stage === 'pending_dashboard') {
+    return <PendingDashboard onLogout={() => setStage('signup')} />;
+  }
+
+  // ─── Main Application ────────────────────────────────────────────────────────
   const renderContent = () => {
     if (activeView === 'generate' && selectedTemplate) {
       return (
@@ -87,8 +101,6 @@ const App: React.FC = () => {
           <Dashboard
             activeTeam={activeTeam}
             onTemplateClick={handleTemplateClick}
-            onCreateNewClick={() => setIsCreateModalOpen(true)}
-            onNavigate={(view) => setActiveView(view)}
           />
         );
       case 'upload':
@@ -96,67 +108,59 @@ const App: React.FC = () => {
           <TemplateUpload
             onComplete={handleTemplateUploadComplete}
             onCancel={() => setActiveView('dashboard')}
-            activeTeam={activeTeam}
           />
         );
-      case 'knowledge':
+      case 'templates':
         return (
-          <Repository
-            activeTeam={activeTeam}
-            onUpdateTeam={handleUpdateTeam}
-            onTemplateClick={handleTemplateClick}
-            onAddNewTemplate={() => setActiveView('upload')}
-          />
-        );
-      case 'bulk':
-        if (!can('generate_doc')) {
-          setActiveView('dashboard');
-          return null;
-        }
-        return (
-          <BulkGenerator
-            activeTeam={activeTeam}
-          />
-        );
-      case 'team':
-        if (!can('manage_team')) {
-          setActiveView('dashboard');
-          return null;
-        }
-        return (
-          <Settings
-            activeTeam={activeTeam}
-            onUpdateTeam={handleUpdateTeam}
-          />
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+            <h2 className="text-2xl font-bold mb-6">Templates Repository</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeTeam.templates.map(tmpl => (
+                <div
+                  key={tmpl.id}
+                  className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer group"
+                  onClick={() => handleTemplateClick(tmpl)}
+                >
+                  <div className="h-40 bg-slate-50 rounded-lg mb-4 flex items-center justify-center">
+                    <div className="text-slate-200">
+                      <svg width="48" height="60" viewBox="0 0 48 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M0 4C0 1.79086 1.79086 0 4 0H32L48 16V56C48 58.2091 46.2091 60 44 60H4C1.79086 60 0 58.2091 0 56V4Z" fill="currentColor"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <h3 className="font-semibold text-slate-900 group-hover:text-blue-600">{tmpl.name}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{tmpl.category} • v{tmpl.version}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         );
       case 'brand':
         return (
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 p-12 shadow-sm animate-in fade-in duration-500">
-            <div className="flex items-center justify-between mb-10">
-              <div>
-                <h2 className="text-3xl font-black mb-2 tracking-tight">Visual Identity</h2>
-                <p className="text-slate-500 font-medium">Standardize the look of your team's artifacts.</p>
-              </div>
-              <button
-                onClick={() => setActiveView('team')}
-                className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
-              >
-                Open Settings
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="space-y-8">
-                <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Primary Brand Color</label>
-                  <div className="flex items-center gap-6">
-                    <div className="w-20 h-20 rounded-[1.5rem] shadow-2xl border-4 border-white" style={{ backgroundColor: activeTeam.assets.primaryColor }} />
-                    <div className="flex-1">
-                      <p className="text-xl font-black text-slate-900 font-mono tracking-tight">{activeTeam.assets.primaryColor}</p>
-                      <p className="text-xs text-slate-500 font-medium mt-1 uppercase">HEX Code</p>
-                    </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+            <h2 className="text-2xl font-bold mb-2">Brand Asset Management</h2>
+            <p className="text-slate-500 mb-8">Configure your workspace visual identity to be applied across all documents.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Primary Color</label>
+                  <div className="flex gap-4">
+                    <input type="color" value={activeTeam.assets.primaryColor} className="w-12 h-12 rounded border-none cursor-pointer" readOnly />
+                    <input type="text" value={activeTeam.assets.primaryColor} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3" readOnly />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Letterhead Text</label>
+                  <input type="text" value={activeTeam.assets.letterhead} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" readOnly />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Company Address</label>
+                  <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 h-24" value={activeTeam.assets.companyAddress} readOnly />
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-6 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
+                <div className="w-24 h-24 bg-white rounded-2xl shadow-sm border border-slate-100 mb-4 flex items-center justify-center text-slate-300 font-bold">LOGO</div>
+                <button className="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">Update Logo</button>
               </div>
             </div>
           </div>
@@ -179,21 +183,12 @@ const App: React.FC = () => {
         teams={teams}
         activeTeam={activeTeam}
         setActiveTeamId={setActiveTeamId}
-        currentUser={currentUser}
-        currentUserRole={currentUserRole}
       />
-
       <main className="flex-1 ml-64 p-8 min-h-screen overflow-y-auto">
         <div className="max-w-7xl mx-auto h-full">
           {renderContent()}
         </div>
       </main>
-
-      <CreateDocumentModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        team={activeTeam}
-      />
     </div>
   );
 };
