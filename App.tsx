@@ -10,6 +10,9 @@ import SignUp from './views/SignUp';
 import CreateWorkspace from './views/CreateWorkspace';
 import BrandSetup from './views/BrandSetup';
 import PendingDashboard from './views/PendingDashboard';
+import TemplateRepository from './views/TemplateRepository';
+import KnowledgeBase from './views/KnowledgeBase';
+import TeamSettings from './views/TeamSettings';
 
 type AppStage = 'signup' | 'create_workspace' | 'brand_setup' | 'pending_dashboard' | 'app';
 
@@ -112,29 +115,16 @@ const App: React.FC = () => {
         );
       case 'templates':
         return (
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-            <h2 className="text-2xl font-bold mb-6">Templates Repository</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeTeam.templates.map(tmpl => (
-                <div
-                  key={tmpl.id}
-                  className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer group"
-                  onClick={() => handleTemplateClick(tmpl)}
-                >
-                  <div className="h-40 bg-slate-50 rounded-lg mb-4 flex items-center justify-center">
-                    <div className="text-slate-200">
-                      <svg width="48" height="60" viewBox="0 0 48 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0 4C0 1.79086 1.79086 0 4 0H32L48 16V56C48 58.2091 46.2091 60 44 60H4C1.79086 60 0 58.2091 0 56V4Z" fill="currentColor"/>
-                      </svg>
-                    </div>
-                  </div>
-                  <h3 className="font-semibold text-slate-900 group-hover:text-blue-600">{tmpl.name}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{tmpl.category} • v{tmpl.version}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TemplateRepository
+            activeTeam={activeTeam}
+            onTemplateClick={handleTemplateClick}
+            onNewTemplate={() => setActiveView('upload')}
+          />
         );
+      case 'knowledge':
+        return <KnowledgeBase />;
+      case 'team':
+        return <TeamSettings activeTeam={activeTeam} />;
       case 'brand':
         return (
           <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
