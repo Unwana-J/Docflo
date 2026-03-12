@@ -20,6 +20,7 @@ interface SidebarProps {
   teams: Team[];
   activeTeam: Team;
   setActiveTeamId: (id: string) => void;
+  user?: { firstName: string; lastName: string; email: string } | null;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -27,7 +28,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   setActiveView, 
   teams, 
   activeTeam, 
-  setActiveTeamId 
+  setActiveTeamId,
+  user
 }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -103,8 +105,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             alt="User"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">Alex Johnson</p>
-            <p className="text-xs text-slate-500 truncate">Admin</p>
+            <p className="text-sm font-medium text-white truncate">
+              {user ? `${user.firstName} ${user.lastName}` : 'Alex Johnson'}
+            </p>
+            <p className="text-xs text-slate-500 truncate">
+              {user ? user.email : 'alex@company.com'}
+            </p>
           </div>
         </div>
       </div>

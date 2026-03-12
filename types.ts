@@ -60,7 +60,8 @@ export interface Team {
 export interface AppState {
   currentUser: {
     id: string;
-    name: string;
+    firstName: string;
+    lastName: string;
     email: string;
   };
   teams: Team[];

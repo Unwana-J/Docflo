@@ -15,9 +15,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 interface DashboardProps {
   activeTeam: Team;
   onTemplateClick: (template: DocumentTemplate) => void;
+  user?: { firstName: string; lastName: string; email: string } | null;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick }) => {
+const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick, user }) => {
   const chartData = [
     { name: 'Mon', count: 12 },
     { name: 'Tue', count: 19 },
@@ -32,7 +33,9 @@ const Dashboard: React.FC<DashboardProps> = ({ activeTeam, onTemplateClick }) =>
     <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Welcome back, Alex</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Welcome back, {user ? user.firstName : 'Alex'}
+          </h1>
           <p className="text-slate-500 mt-1">Here's what's happening with your {activeTeam.name} workspace.</p>
         </div>
         <div className="relative">

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Lock, ArrowRight, Github, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 interface SignUpProps {
-  onComplete: (userIsPending: boolean) => void;
+  onComplete: (isPending: boolean, firstName: string, lastName: string, email: string) => void;
 }
 
 const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
@@ -27,7 +27,7 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
-    onComplete(!!inviteToken);
+    onComplete(!!inviteToken, firstName, lastName, email);
   };
 
   const PasswordStrength = () => {

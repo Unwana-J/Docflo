@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { TemplateField, FieldType } from "../types";
 
@@ -6,6 +5,23 @@ export interface DetectionResult {
   fields: TemplateField[];
   suggestedTitle: string;
   processedContent: string; // Now expected to be high-fidelity HTML
+}
+
+export interface FieldCoordinate {
+  fieldId: string;
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  hexColor?: string;
+}
+
+export interface CoordinateResult {
+  coordinates: FieldCoordinate[];
 }
 
 // Simple Promise Queue to ensure sequential execution
@@ -50,13 +66,22 @@ export const detectTemplateFields = async (
   return apiQueue.enqueue(() => executeDetection(fileData, mimeType, rawText, onRetry));
 };
 
+export const extractFieldCoordinates = async (
+  fileData: string,
+  mimeType: string,
+  fields: TemplateField[],
+  onRetry?: (attempt: number) => void
+): Promise<CoordinateResult> => {
+  return apiQueue.enqueue(() => executeCoordinateExtraction(fileData, mimeType, fields, onRetry));
+};
+
 const executeDetection = async (
   fileData?: string, 
   mimeType?: string, 
   rawText?: string,
   onRetry?: (attempt: number) => void
 ): Promise<DetectionResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai: any = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const parts: any[] = [];
   
@@ -122,10 +147,9 @@ const executeDetection = async (
 
   while (retries <= maxRetries) {
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: { parts },
-        config: {
+      const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -159,7 +183,7 @@ const executeDetection = async (
         }
       });
       
-      const data = JSON.parse(response.text || "{}");
+      const data = JSON.parse(response.response.text() || "{}");
       const fields: TemplateField[] = data.fields.map((f: any, idx: number) => ({
         id: `field-${idx}-${Date.now()}`,
         name: f.variableName,
@@ -199,3 +223,99 @@ const executeDetection = async (
   throw new Error("Unexpected end of retry loop");
 };
 
+const executeCoordinateExtraction = async (
+  fileData: string,
+  mimeType: string,
+  fields: TemplateField[],
+  onRetry?: (attempt: number) => void
+): Promise<CoordinateResult> => {
+  const ai: any = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+  const fieldNames = fields.map(f => f.name).join(", ");
+  const prompt = `
+    Analyze the uploaded document and find the exact coordinates for the following fields: [${fieldNames}].
+    
+    For each field, provide:
+    1. variableName
+    2. pageNumber (1-indexed)
+    3. x and y coordinates (normalized 0-1000, where 0,0 is top-left)
+    4. width and height (normalized 0-1000)
+    5. detected typography (fontFamily, fontSize in pts, fontWeight, hexColor)
+    
+    Return the result as a strict JSON object.
+  `;
+
+  let retries = 0;
+  const maxRetries = 3;
+  let delay = 1000;
+
+  while (retries <= maxRetries) {
+    try {
+      const result = await model.generateContent({
+        contents: [{
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: fileData } },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              coordinates: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    variableName: { type: Type.STRING },
+                    pageNumber: { type: Type.NUMBER },
+                    x: { type: Type.NUMBER },
+                    y: { type: Type.NUMBER },
+                    width: { type: Type.NUMBER },
+                    height: { type: Type.NUMBER },
+                    fontFamily: { type: Type.STRING },
+                    fontSize: { type: Type.NUMBER },
+                    fontWeight: { type: Type.STRING },
+                    hexColor: { type: Type.STRING }
+                  },
+                  required: ["variableName", "pageNumber", "x", "y", "width", "height"]
+                }
+              }
+            },
+            required: ["coordinates"]
+          }
+        }
+      });
+
+      const data = JSON.parse(result.response.text());
+      return {
+        coordinates: data.coordinates.map((c: any) => ({
+          fieldId: c.variableName,
+          pageNumber: c.pageNumber,
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+          fontFamily: c.fontFamily,
+          fontSize: c.fontSize,
+          fontWeight: c.fontWeight,
+          hexColor: c.hexColor
+        }))
+      };
+    } catch (err: any) {
+      const isRateLimit = err?.status === 429 || err?.message?.includes("429");
+      if (isRateLimit && retries < maxRetries) {
+        retries++;
+        if (onRetry) onRetry(retries);
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Unexpected end of coordinate extraction loop");
+};

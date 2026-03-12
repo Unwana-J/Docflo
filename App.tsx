@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [newWorkspaceType, setNewWorkspaceType] = useState('');
   const [newCategories, setNewCategories] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
 
   // ─── App state ───────────────────────────────────────────────────────────────
   const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
@@ -32,7 +33,8 @@ const App: React.FC = () => {
   const activeTeam = teams.find(t => t.id === activeTeamId) || teams[0];
 
   // ─── Onboarding handlers ─────────────────────────────────────────────────────
-  const handleSignUp = (isPending: boolean) => {
+  const handleSignUp = (isPending: boolean, firstName: string, lastName: string, email: string) => {
+    setCurrentUser({ firstName, lastName, email });
     if (isPending) {
       setStage('pending_dashboard');
     } else {
@@ -116,6 +118,7 @@ const App: React.FC = () => {
           <Dashboard
             activeTeam={activeTeam}
             onTemplateClick={handleTemplateClick}
+            user={currentUser}
           />
         );
       case 'upload':
@@ -185,6 +188,7 @@ const App: React.FC = () => {
         teams={teams}
         activeTeam={activeTeam}
         setActiveTeamId={setActiveTeamId}
+        user={currentUser}
       />
       <main className="flex-1 ml-64 p-8 min-h-screen overflow-y-auto">
         <div className="max-w-7xl mx-auto h-full">

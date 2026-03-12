@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ArrowLeft, 
@@ -14,7 +13,10 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
-import { DocumentTemplate, Team } from '../types';
+import { DocumentTemplate, Team, FieldType } from '../types';
+import { renderPDF, renderWord } from '../services/exportEngine';
+import { extractFieldCoordinates, FieldCoordinate } from '../services/geminiService';
+import { saveAs } from 'file-saver';
 
 interface DocumentGeneratorProps {
   template: DocumentTemplate;
@@ -37,25 +39,48 @@ const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ template, team, o
     setFormData(initialData);
   }, [template]);
 
-  const handleExport = (type: 'pdf' | 'docx') => {
+  const handleExport = async (type: 'pdf' | 'docx') => {
     setIsExporting(true);
-    setExportProgress(0);
+    setExportProgress(10);
     
-    const interval = setInterval(() => {
-      setExportProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 100);
+    try {
+      if (type === 'pdf') {
+        setExportProgress(30);
+        // In a real app, we would fetch the original PDF bytes and coordinates from DB
+        // For this demo, we mock the bytes (a blank PDF if not available) and coordinates
+        const mockPdfBytes = new Uint8Array(20); // Placeholder
+        const mockCoords: FieldCoordinate[] = template.fields.map((f, i) => ({
+          fieldId: f.name,
+          pageNumber: 1,
+          x: 100,
+          y: 200 + (i * 100),
+          width: 500,
+          height: 100,
+          fontSize: 12
+        }));
 
-    setTimeout(() => {
+        setExportProgress(60);
+        const pdfBytes = await renderPDF(mockPdfBytes, mockCoords, formData);
+        
+        setExportProgress(90);
+        const blob = new Blob([(pdfBytes as any).buffer || pdfBytes], { type: 'application/pdf' });
+        saveAs(blob, `${template.name}.pdf`);
+      } else {
+        setExportProgress(50);
+        const wordBlob = await renderWord(template, formData);
+        saveAs(wordBlob, `${template.name}.docx`);
+      }
+      
+      setExportProgress(100);
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(0);
+      }, 500);
+    } catch (error) {
+      console.error("Export failed:", error);
       setIsExporting(false);
-      setExportProgress(0);
-      alert(`Successfully generated and finalized ${template.name}.${type}`);
-    }, 1500);
+      alert("Failed to generate document. Using mock fallback.");
+    }
   };
 
   // Logic to inject interactive styles and user data into the AI-generated HTML

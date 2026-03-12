@@ -44,6 +44,22 @@ CREATE TABLE Invites (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- PDF Injection Metadata
+CREATE TABLE Template_Field_Coordinates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    template_id UUID NOT NULL, -- Reference to templates table (once implemented)
+    field_id VARCHAR(255) NOT NULL,
+    page_number INTEGER NOT NULL,
+    x_pos REAL NOT NULL,
+    y_pos REAL NOT NULL,
+    width REAL NOT NULL,
+    height REAL NOT NULL,
+    font_family VARCHAR(255),
+    font_size REAL,
+    font_weight VARCHAR(50),
+    hex_color VARCHAR(7)
+);
+
 -- Create indexes for frequent queries
 CREATE INDEX idx_workspace_members_user_id ON Workspace_Members(user_id);
 CREATE INDEX idx_invites_token ON Invites(token);
