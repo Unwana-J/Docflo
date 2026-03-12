@@ -81,7 +81,8 @@ const executeDetection = async (
   rawText?: string,
   onRetry?: (attempt: number) => void
 ): Promise<DetectionResult> => {
-  const ai: any = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+  const ai = new GoogleGenAI(apiKey);
   
   const parts: any[] = [];
   
@@ -147,7 +148,7 @@ const executeDetection = async (
 
   while (retries <= maxRetries) {
     try {
-      const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+      const response = await (ai as any).getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
         contents: [{ role: "user", parts }],
         generationConfig: {
           responseMimeType: "application/json",
@@ -229,8 +230,9 @@ const executeCoordinateExtraction = async (
   fields: TemplateField[],
   onRetry?: (attempt: number) => void
 ): Promise<CoordinateResult> => {
-  const ai: any = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-  const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const apiKey = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+  const ai = new GoogleGenAI(apiKey);
+  const model = (ai as any).getGenerativeModel({ model: "gemini-1.5-flash" });
   
   const fieldNames = fields.map(f => f.name).join(", ");
   const prompt = `
