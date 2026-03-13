@@ -53,11 +53,35 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
     text?: string;
     html?: string;
     blobUrl?: string;
+    renderUrl?: string;
     type: string;
     name: string;
     size: number;
     isGeneratingPreview?: boolean;
   } | null>(null);
+
+  const renderPdfToImage = async (file: File): Promise<string> => {
+    try {
+      const arrayBuffer = await readFileAsArrayBuffer(file);
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      await page.render({
+        canvasContext: context!,
+        viewport: viewport
+      }).promise;
+      
+      return canvas.toDataURL('image/png');
+    } catch (err) {
+      console.error('PDF Render Error:', err);
+      return '';
+    }
+  };
 
   const readFileAsBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -94,9 +118,11 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
       let text: string | undefined;
       let html: string | undefined;
       let blobUrl: string | undefined;
+      let renderUrl: string | undefined;
 
       if (isPdf) {
         blobUrl = URL.createObjectURL(file);
+        renderUrl = await renderPdfToImage(file);
         data = await readFileAsBase64(file);
       } else if (isDocx) {
         const buffer = await readFileAsArrayBuffer(file);
@@ -104,9 +130,11 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
         const htmlResult = await mammoth.convertToHtml({ arrayBuffer: buffer });
         text = textResult.value;
         html = htmlResult.value;
+        renderUrl = html; // For Word, we use mammoth's HTML as the "render"
         data = await readFileAsBase64(file);
       } else if (isImage) {
         blobUrl = URL.createObjectURL(file);
+        renderUrl = blobUrl;
         data = await readFileAsBase64(file);
       } else {
         const reader = new FileReader();
@@ -114,6 +142,7 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
           reader.onload = () => res(reader.result as string);
           reader.readAsText(file);
         });
+        renderUrl = `<pre style="padding: 20px;">${text}</pre>`;
       }
 
       setPendingFile({
@@ -121,6 +150,7 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
         text,
         html,
         blobUrl,
+        renderUrl,
         type: file.type,
         name: file.name,
         size: file.size,
@@ -429,13 +459,18 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
                   />
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center p-4">
-                    {pendingFile?.blobUrl ? (
-                      <img src={pendingFile.blobUrl} className="max-w-full h-auto shadow-sm" alt="Template Preview" />
+                    {pendingFile?.renderUrl ? (
+                      pendingFile.renderUrl.startsWith('data:image') || pendingFile.type.startsWith('image/') 
+                        ? <img src={pendingFile.renderUrl} className="max-w-full h-auto shadow-sm" alt="Template Preview" />
+                        : <div 
+                            className="bg-white p-12 w-full h-full overflow-auto text-slate-800" 
+                            style={{ fontFamily: 'Georgia, serif' }}
+                            dangerouslySetInnerHTML={{ __html: pendingFile.renderUrl }} 
+                          />
                     ) : (
                       <div className="text-slate-400 text-center space-y-4">
                         <FileText className="w-16 h-16 mx-auto opacity-20" />
-                        <p className="font-bold">Original Document View</p>
-                        <p className="text-sm italic">Click anywhere on the document to "anchor" a variable.</p>
+                        <p className="font-bold">Generating Preview...</p>
                       </div>
                     )}
                     
