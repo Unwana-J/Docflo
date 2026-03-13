@@ -33,6 +33,9 @@ export interface DocumentTemplate {
   category: string;
   content: string; // The raw text with placeholders
   fields: TemplateField[];
+  originalData?: string; // base64 data of the PDF/DOCX
+  thumbnailUrl?: string; // Rendered image for preview
+  mimeType?: string;     // application/pdf, etc.
   createdAt: string;
   updatedAt: string;
   version: number;

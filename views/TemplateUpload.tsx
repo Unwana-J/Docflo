@@ -246,6 +246,9 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
       category: 'General',
       content: fileContent,
       fields,
+      originalData: pendingFile?.data,
+      thumbnailUrl: pendingFile?.renderUrl,
+      mimeType: pendingFile?.type,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 1

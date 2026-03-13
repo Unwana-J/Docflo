@@ -46,21 +46,30 @@ const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ template, team, o
     try {
       if (type === 'pdf') {
         setExportProgress(30);
-        // In a real app, we would fetch the original PDF bytes and coordinates from DB
-        // For this demo, we mock the bytes (a blank PDF if not available) and coordinates
-        const mockPdfBytes = new Uint8Array(20); // Placeholder
-        const mockCoords: FieldCoordinate[] = template.fields.map((f, i) => ({
+        // Use original data if available, otherwise fallback to empty (though this shouldn't happen now)
+        let pdfBytesInput: Uint8Array;
+        if (template.originalData) {
+          const binaryString = window.atob(template.originalData);
+          pdfBytesInput = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            pdfBytesInput[i] = binaryString.charCodeAt(i);
+          }
+        } else {
+          pdfBytesInput = new Uint8Array(0);
+        }
+
+        const coords: FieldCoordinate[] = template.fields.map(f => ({
           fieldId: f.name,
-          pageNumber: 1,
-          x: 100,
-          y: 200 + (i * 100),
-          width: 500,
-          height: 100,
+          pageNumber: f.page || 1,
+          x: f.x || 0,
+          y: f.y || 0,
+          width: f.width || 100,
+          height: f.height || 20,
           fontSize: 12
         }));
 
         setExportProgress(60);
-        const pdfBytes = await renderPDF(mockPdfBytes, mockCoords, formData);
+        const pdfBytes = await renderPDF(pdfBytesInput, coords, formData);
         
         setExportProgress(90);
         const blob = new Blob([(pdfBytes as any).buffer || pdfBytes], { type: 'application/pdf' });
@@ -173,16 +182,53 @@ const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ template, team, o
           
           <div className="flex-1 overflow-y-auto p-12 flex justify-center custom-scrollbar">
             <div className="bg-white w-full max-w-[850px] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.2)] min-h-[1100px] border border-slate-200 rounded-sm relative p-0 overflow-hidden">
-               <div 
-                className="h-full w-full p-20"
-                dangerouslySetInnerHTML={{ __html: generatedHtml }}
-                onMouseOver={(e) => {
-                  const target = e.target as HTMLElement;
-                  const fieldName = target.closest('[data-field-id]')?.getAttribute('data-field-id');
-                  if (fieldName) setFocusedField(fieldName);
-                }}
-                onMouseOut={() => setFocusedField(null)}
-               />
+               {template.content ? (
+                 <div 
+                  className="h-full w-full p-20"
+                  dangerouslySetInnerHTML={{ __html: generatedHtml }}
+                  onMouseOver={(e) => {
+                    const target = e.target as HTMLElement;
+                    const fieldName = target.closest('[data-field-id]')?.getAttribute('data-field-id');
+                    if (fieldName) setFocusedField(fieldName);
+                  }}
+                  onMouseOut={() => setFocusedField(null)}
+                 />
+               ) : (
+                 <div className="relative w-full h-full flex flex-col items-center justify-center p-2">
+                   {template.thumbnailUrl ? (
+                     template.thumbnailUrl.startsWith('data:image') || template.mimeType?.startsWith('image/')
+                       ? <img src={template.thumbnailUrl} className="max-w-full h-auto shadow-sm" alt="Template Preview" />
+                       : <div 
+                           className="bg-white p-16 w-full h-full overflow-auto text-slate-800" 
+                           style={{ fontFamily: 'Georgia, serif' }}
+                           dangerouslySetInnerHTML={{ __html: template.thumbnailUrl }} 
+                         />
+                   ) : (
+                     <div className="text-slate-400 text-center py-20 grayscale opacity-20">
+                       <FileText className="w-24 h-24 mx-auto mb-4" />
+                       <p className="font-black">Preview Not Available</p>
+                     </div>
+                   )}
+                   
+                   {/* Overlay markers for manual variables */}
+                   {template.fields.map(f => f.x && f.y && (
+                      <div 
+                        key={f.id}
+                        className={`absolute flex items-center justify-center p-2 rounded-lg border-2 transition-all duration-300 ${focusedField === f.name ? 'bg-blue-600 border-blue-400 scale-110 shadow-2xl z-20' : 'bg-slate-900 border-slate-700 scale-100 z-10 opacity-70'}`}
+                        style={{ 
+                          left: `${(f.x / 1000) * 100}%`, 
+                          top: `${(f.y / 1000) * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                          minWidth: '60px'
+                        }}
+                      >
+                        <span className="text-[9px] font-black text-white uppercase truncate tracking-tighter">
+                          {formData[f.name] || f.name}
+                        </span>
+                      </div>
+                    ))}
+                 </div>
+               )}
             </div>
           </div>
         </div>
