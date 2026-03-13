@@ -34,8 +34,16 @@ const App: React.FC = () => {
 
   // ─── Onboarding handlers ─────────────────────────────────────────────────────
   const handleSignUp = (isPending: boolean, firstName: string, lastName: string, email: string) => {
-    setCurrentUser({ firstName, lastName, email });
-    if (isPending) {
+    const isLogin = !firstName && !lastName;
+    setCurrentUser({ 
+      firstName: firstName || 'DocuFlow', 
+      lastName: lastName || 'User', 
+      email 
+    });
+    
+    if (isLogin) {
+      setStage('app');
+    } else if (isPending) {
       setStage('pending_dashboard');
     } else {
       setStage('create_workspace');

@@ -14,6 +14,7 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [mode, setMode] = useState<'signup' | 'login'>('signup');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -21,13 +22,16 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
     if (token) setInviteToken(token);
   }, []);
 
-  const passwordMismatch = confirmPassword.length > 0 && password !== confirmPassword;
-  const isValid = firstName.trim() && lastName.trim() && email.trim() && password.length >= 8 && password === confirmPassword;
+  const passwordMismatch = mode === 'signup' && confirmPassword.length > 0 && password !== confirmPassword;
+  const isValid = mode === 'login' 
+    ? (email.trim() && password.length >= 8)
+    : (firstName.trim() && lastName.trim() && email.trim() && password.length >= 8 && password === confirmPassword);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
-    onComplete(!!inviteToken, firstName, lastName, email);
+    // For login, we'll pass firstName/lastName as empty or dummy if not available
+    onComplete(mode === 'signup' && !!inviteToken, firstName, lastName, email);
   };
 
   const PasswordStrength = () => {
@@ -59,10 +63,16 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
           <span className="text-white font-black text-2xl tracking-tighter">DF</span>
         </div>
         <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-          {inviteToken ? 'Join Your Team on DocuFlow' : 'Create your account'}
+          {mode === 'login' ? 'Welcome back' : inviteToken ? 'Join Your Team on DocuFlow' : 'Create your account'}
         </h2>
         <p className="mt-2 text-sm text-slate-500">
-          {inviteToken ? 'An invite token was detected. You will be added as a collaborator.' : 'Already have an account? Sign in'}
+          {mode === 'login' ? (
+            <>Don't have an account? <button onClick={() => setMode('signup')} className="text-blue-600 font-bold hover:underline">Sign up</button></>
+          ) : (
+            <>{inviteToken ? 'An invite token was detected. You will be added as a collaborator.' : 'Already have an account? '} 
+              <button onClick={() => setMode('login')} className="text-blue-600 font-bold hover:underline">Sign in</button>
+            </>
+          )}
         </p>
       </div>
 
@@ -70,37 +80,39 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
         <div className="bg-white py-8 px-4 shadow-2xl shadow-slate-200/50 sm:rounded-[2rem] sm:px-10 border border-slate-100">
           <form className="space-y-5" onSubmit={handleSubmit}>
 
-            {/* Name row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">First Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={e => setFirstName(e.target.value)}
-                    className="appearance-none block w-full pl-9 pr-3 py-3 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
-                    placeholder="Alex"
-                  />
+            {/* Name row - only for signup */}
+            {mode === 'signup' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">First Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      value={firstName}
+                      onChange={e => setFirstName(e.target.value)}
+                      className="appearance-none block w-full pl-9 pr-3 py-3 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
+                      placeholder="Alex"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Last Name</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      value={lastName}
+                      onChange={e => setLastName(e.target.value)}
+                      className="appearance-none block w-full pl-9 pr-3 py-3 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
+                      placeholder="Johnson"
+                    />
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Last Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={e => setLastName(e.target.value)}
-                    className="appearance-none block w-full pl-9 pr-3 py-3 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
-                    placeholder="Johnson"
-                  />
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Email */}
             <div>
@@ -143,44 +155,46 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
               <PasswordStrength />
             </div>
 
-            {/* Confirm password */}
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Confirm Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type={showConfirm ? 'text' : 'password'}
-                  required
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  className={`appearance-none block w-full pl-9 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-all text-sm ${
-                    passwordMismatch
-                      ? 'border-red-300 focus:ring-red-400'
-                      : 'border-slate-200 focus:ring-blue-500'
-                  }`}
-                  placeholder="Repeat your password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            {/* Confirm password - only for signup */}
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Confirm Password</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    className={`appearance-none block w-full pl-9 pr-10 py-3 border rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-all text-sm ${
+                      passwordMismatch
+                        ? 'border-red-300 focus:ring-red-400'
+                        : 'border-slate-200 focus:ring-blue-500'
+                    }`}
+                    placeholder="Repeat your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passwordMismatch && (
+                  <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1.5 font-semibold">
+                    <AlertCircle className="w-3.5 h-3.5" /> Passwords do not match
+                  </p>
+                )}
               </div>
-              {passwordMismatch && (
-                <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1.5 font-semibold">
-                  <AlertCircle className="w-3.5 h-3.5" /> Passwords do not match
-                </p>
-              )}
-            </div>
+            )}
 
             <button
               type="submit"
               disabled={!isValid}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              Continue <ArrowRight className="w-4 h-4" />
+              {mode === 'login' ? 'Sign In' : 'Continue'} <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
