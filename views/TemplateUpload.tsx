@@ -18,7 +18,8 @@ import {
   Maximize2,
   Trash2,
   Plus,
-  FileCode
+  FileCode,
+  ChevronRight
 } from 'lucide-react';
 import { detectTemplateFields } from '../services/geminiService';
 import { TemplateField, FieldType, DocumentTemplate } from '../types';
@@ -34,7 +35,7 @@ interface TemplateUploadProps {
   onCancel: () => void;
 }
 
-type UploadStep = 'upload' | 'preview' | 'scanning' | 'refine';
+type UploadStep = 'upload' | 'preview' | 'choice' | 'scanning' | 'refine';
 
 const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel }) => {
   const [step, setStep] = useState<UploadStep>('upload');
@@ -131,6 +132,8 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
     }
   };
 
+  const [manualCoords, setManualCoords] = useState<{ x: number, y: number } | null>(null);
+
   const startAnalysis = async () => {
     if (!pendingFile) return;
     setLoading(true);
@@ -158,7 +161,7 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
       setIsRetrying(false);
       // Wait for user to hit "Try again" manually, or cancel
     } finally {
-      if (!error) setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -190,12 +193,17 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
     setFields(fields.filter(f => f.id !== id));
   };
 
-  const addFieldManually = () => {
+  const addFieldManually = (coords?: { x: number, y: number }) => {
     const newField: TemplateField = {
       id: `field-manual-${Date.now()}`,
       name: `NewVariable${fields.length + 1}`,
       type: FieldType.TEXT,
-      required: true
+      required: true,
+      x: coords?.x,
+      y: coords?.y,
+      width: 150,
+      height: 30,
+      page: 1
     };
     setFields([...fields, newField]);
   };
@@ -268,10 +276,10 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
             </div>
             
             <button 
-              onClick={startAnalysis} 
+              onClick={() => setStep('choice')} 
               className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-4 text-xl hover:scale-[1.02] active:scale-[0.98]"
             >
-              <Sparkles className="w-8 h-8" /> Reconstruct Layout
+              Continue to Setup <ChevronDown className="w-8 h-8 -rotate-90" />
             </button>
             <button onClick={() => setStep('upload')} className="w-full text-slate-400 font-bold py-2 hover:text-slate-600 transition-colors uppercase text-xs tracking-widest">Swap File</button>
           </div>
@@ -302,6 +310,57 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
                 )}
              </div>
           </div>
+        </div>
+      )}
+
+      {step === 'choice' && (
+        <div className="max-w-4xl mx-auto space-y-10 py-12 animate-in slide-in-from-bottom-8 duration-500">
+          <div className="text-center space-y-4">
+            <h3 className="text-4xl font-black text-slate-900 tracking-tighter">How would you like to build this template?</h3>
+            <p className="text-slate-500 text-lg font-medium">Choose between automated AI reconstruction or precision manual setup.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <button 
+              onClick={startAnalysis}
+              className="group bg-white border-2 border-slate-100 p-10 rounded-[3rem] text-left hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-100 transition-all duration-300 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[4rem] -translate-y-12 translate-x-12 group-hover:translate-x-8 group-hover:-translate-y-8 transition-transform" />
+              <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg group-hover:scale-110 transition-transform">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <h4 className="text-2xl font-black text-slate-900 mb-3">AI Reconstruction</h4>
+              <p className="text-slate-500 font-medium leading-relaxed mb-6">Gemini will analyze the document, extract variables, and rebuild a high-fidelity HTML version automatically.</p>
+              <div className="flex items-center gap-2 text-blue-600 font-black text-sm uppercase tracking-widest">
+                Start AI Scanning <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+
+            <button 
+              onClick={() => {
+                setFileContent(''); // Clear content to trigger manual visual view
+                setStep('refine'); 
+              }}
+              className="group bg-white border-2 border-slate-100 p-10 rounded-[3rem] text-left hover:border-slate-900 hover:shadow-2xl transition-all duration-300 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-[4rem] -translate-y-12 translate-x-12 group-hover:translate-x-8 group-hover:-translate-y-8 transition-transform" />
+              <div className="bg-slate-900 w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg group-hover:scale-110 transition-transform">
+                <Settings2 className="w-8 h-8" />
+              </div>
+              <h4 className="text-2xl font-black text-slate-900 mb-3">Manual Setup</h4>
+              <p className="text-slate-500 font-medium leading-relaxed mb-6">Skip the AI scanning and manually identify the variables you want to extract from this document yourself.</p>
+              <div className="flex items-center gap-2 text-slate-900 font-black text-sm uppercase tracking-widest">
+                Identify Manually <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+          </div>
+
+          <button 
+            onClick={() => setStep('preview')}
+            className="block mx-auto text-slate-400 font-bold hover:text-slate-600 transition-colors uppercase text-xs tracking-[0.2em]"
+          >
+            ← Back to Preview
+          </button>
         </div>
       )}
 
@@ -346,17 +405,53 @@ const TemplateUpload: React.FC<TemplateUploadProps> = ({ onComplete, onCancel })
             </div>
             
             <div className="flex-1 overflow-auto p-12 custom-scrollbar flex justify-center bg-slate-300/30">
-              <div className="bg-white w-full max-w-[850px] shadow-2xl min-h-[1100px] border border-slate-300 rounded-sm relative p-2">
-                <div 
-                  className="p-16 h-full w-full"
-                  dangerouslySetInnerHTML={{ __html: refinedHtml }}
-                  onMouseOver={(e) => {
-                    const target = e.target as HTMLElement;
-                    const fieldId = target.closest('[data-field-id]')?.getAttribute('data-field-id');
-                    if (fieldId) setHoveredField(fieldId);
-                  }}
-                  onMouseOut={() => setHoveredField(null)}
-                />
+              <div 
+                className="bg-white w-full max-w-[850px] shadow-2xl min-h-[1100px] border border-slate-300 rounded-sm relative p-2 overflow-hidden"
+                onClick={(e) => {
+                  if (step === 'refine' && !refinedHtml) {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 1000;
+                    const y = ((e.clientY - rect.top) / rect.height) * 1000;
+                    addFieldManually({ x, y });
+                  }
+                }}
+              >
+                {refinedHtml ? (
+                  <div 
+                    className="p-16 h-full w-full"
+                    dangerouslySetInnerHTML={{ __html: refinedHtml }}
+                    onMouseOver={(e) => {
+                      const target = e.target as HTMLElement;
+                      const fieldId = target.closest('[data-field-id]')?.getAttribute('data-field-id');
+                      if (fieldId) setHoveredField(fieldId);
+                    }}
+                    onMouseOut={() => setHoveredField(null)}
+                  />
+                ) : (
+                  <div className="relative w-full h-full flex items-center justify-center p-4">
+                    {pendingFile?.blobUrl ? (
+                      <img src={pendingFile.blobUrl} className="max-w-full h-auto shadow-sm" alt="Template Preview" />
+                    ) : (
+                      <div className="text-slate-400 text-center space-y-4">
+                        <FileText className="w-16 h-16 mx-auto opacity-20" />
+                        <p className="font-bold">Original Document View</p>
+                        <p className="text-sm italic">Click anywhere on the document to "anchor" a variable.</p>
+                      </div>
+                    )}
+                    
+                    {fields.map(f => f.x && f.y && (
+                      <div 
+                        key={f.id}
+                        className={`absolute w-4 h-4 rounded-full border-2 border-white shadow-lg transition-transform ${hoveredField === f.id ? 'bg-blue-600 scale-150 z-20' : 'bg-slate-900 scale-100 z-10'}`}
+                        style={{ 
+                          left: `${(f.x / 1000) * 100}%`, 
+                          top: `${(f.y / 1000) * 100}%`,
+                          transform: 'translate(-50%, -50%)' 
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

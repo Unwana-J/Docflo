@@ -19,6 +19,11 @@ export interface TemplateField {
   required: boolean;
   defaultValue?: string;
   options?: string[]; // For dropdowns
+  x?: number;         // Normalized X coordinate (0-1000)
+  y?: number;         // Normalized Y coordinate (0-1000)
+  width?: number;     // Normalized width
+  height?: number;    // Normalized height
+  page?: number;      // Page number for multi-page docs
 }
 
 export interface DocumentTemplate {
