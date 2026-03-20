@@ -1,20 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  ArrowLeft, 
-  CheckCircle2, 
-  RefreshCw,
-  Settings,
-  Download,
-  FileCheck,
-  ChevronRight,
-  Layout,
-  Lock,
-  Printer,
-  FileText,
-  AlertCircle
+import {
+  ArrowLeft, CheckCircle2, RefreshCw, Settings, Download,
+  FileCheck, ChevronRight, Lock, Printer, FileText, AlertCircle, Tag
 } from 'lucide-react';
 import { DocumentTemplate, Team, FieldType } from '../types';
-import { renderPDF, renderWord } from '../services/exportEngine';
+import { renderPDF, renderWord, generateDocumentWhiteOutStamp, downloadPdf } from '../services/exportEngine';
 import { extractFieldCoordinates, FieldCoordinate } from '../services/geminiService';
 import { saveAs } from 'file-saver';
 
@@ -25,96 +15,98 @@ interface DocumentGeneratorProps {
 }
 
 const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ template, team, onBack }) => {
+  // Detect which engine to use
+  const isManualPdfTemplate = !!(template.pdfFields && template.pdfFields.length > 0 && template.originalPdfBase64);
+
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initialize form with defaults
     const initialData: Record<string, string> = {};
-    template.fields.forEach(field => {
-      initialData[field.name] = field.defaultValue || '';
-    });
+    if (isManualPdfTemplate) {
+      template.pdfFields!.forEach(f => { initialData[f.id] = f.originalValue || ''; });
+    } else {
+      template.fields.forEach(field => { initialData[field.name] = field.defaultValue || ''; });
+    }
     setFormData(initialData);
   }, [template]);
 
   const handleExport = async (type: 'pdf' | 'docx') => {
     setIsExporting(true);
     setExportProgress(10);
-    
+
     try {
-      if (type === 'pdf') {
+      // ── White-Out + Stamp path (Manual PDF templates) ──────────────────────
+      if (isManualPdfTemplate && type === 'pdf') {
+        setExportProgress(40);
+        const bytes = await generateDocumentWhiteOutStamp(
+          template.originalPdfBase64!,
+          template.pdfFields!,
+          formData
+        );
+        setExportProgress(95);
+        downloadPdf(bytes, template.name);
+
+      // ── Legacy AI-path PDF export ──────────────────────────────────────────
+      } else if (type === 'pdf') {
         setExportProgress(30);
-        // Use original data if available, otherwise fallback to empty (though this shouldn't happen now)
         let pdfBytesInput: Uint8Array;
         if (template.originalData) {
           const binaryString = window.atob(template.originalData);
           pdfBytesInput = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            pdfBytesInput[i] = binaryString.charCodeAt(i);
-          }
+          for (let i = 0; i < binaryString.length; i++) pdfBytesInput[i] = binaryString.charCodeAt(i);
         } else {
           pdfBytesInput = new Uint8Array(0);
         }
-
         const coords: FieldCoordinate[] = template.fields.map(f => ({
-          fieldId: f.name,
-          pageNumber: f.page || 1,
-          x: f.x || 0,
-          y: f.y || 0,
-          width: f.width || 100,
-          height: f.height || 20,
-          fontSize: 12
+          fieldId: f.name, pageNumber: f.page || 1,
+          x: f.x || 0, y: f.y || 0, width: f.width || 100, height: f.height || 20, fontSize: 12
         }));
-
         setExportProgress(60);
         const pdfBytes = await renderPDF(pdfBytesInput, coords, formData);
-        
         setExportProgress(90);
         const blob = new Blob([(pdfBytes as any).buffer || pdfBytes], { type: 'application/pdf' });
         saveAs(blob, `${template.name}.pdf`);
+
+      // ── Word export ────────────────────────────────────────────────────────
       } else {
         setExportProgress(50);
         const wordBlob = await renderWord(template, formData);
         saveAs(wordBlob, `${template.name}.docx`);
       }
-      
+
       setExportProgress(100);
-      setTimeout(() => {
-        setIsExporting(false);
-        setExportProgress(0);
-      }, 500);
+      setTimeout(() => { setIsExporting(false); setExportProgress(0); }, 500);
     } catch (error) {
-      console.error("Export failed:", error);
+      console.error('Export failed:', error);
       setIsExporting(false);
-      alert("Failed to generate document. Using mock fallback.");
+      alert('Failed to generate document.');
     }
   };
 
   // Logic to inject interactive styles and user data into the AI-generated HTML
   const generatedHtml = useMemo(() => {
+    if (isManualPdfTemplate) return ''; // Manual path shows thumbnail, not HTML
     let html = template.content;
     template.fields.forEach(field => {
       const value = formData[field.name];
       const isFocused = focusedField === field.name;
       const isPlaceholder = !value;
-      
-      const highlightClass = isFocused 
-        ? 'bg-blue-500 text-white shadow-lg ring-4 ring-blue-500/10' 
-        : isPlaceholder 
+      const highlightClass = isFocused
+        ? 'bg-blue-500 text-white shadow-lg ring-4 ring-blue-500/10'
+        : isPlaceholder
           ? 'bg-amber-100 text-amber-800 border-amber-200 border-b-2 font-bold px-2'
           : 'bg-blue-50 text-blue-700 border-blue-100 font-bold px-1';
-      
       const displayValue = value || `[${field.name}]`;
       const replacement = `<span class="inline-block rounded-sm transition-all duration-300 ${highlightClass}" data-field-id="${field.name}">${displayValue}</span>`;
-      
       const placeholder = `{{${field.name}}}`;
-      const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = placeholder.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
       html = html.replace(new RegExp(escaped, 'g'), replacement);
     });
     return html;
-  }, [template.content, template.fields, formData, focusedField]);
+  }, [template.content, template.fields, formData, focusedField, isManualPdfTemplate]);
 
   return (
     <div className="h-full flex flex-col gap-8 animate-in slide-in-from-bottom-6 duration-700 pb-12">
@@ -171,18 +163,29 @@ const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ template, team, o
         </div>
       </header>
 
+      {/* Document preview canvas */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-10 min-h-0">
         <div className="lg:col-span-8 bg-slate-200 rounded-[3rem] border-8 border-slate-100 flex flex-col min-h-0 overflow-hidden relative group shadow-inner">
           <div className="absolute top-8 left-8 z-10">
             <div className="flex items-center gap-2 bg-slate-900/90 backdrop-blur rounded-full px-4 py-2 text-[10px] font-black text-white shadow-2xl tracking-[0.1em] border border-white/20">
               <Lock className="w-3 h-3 text-emerald-400" />
-              ARTIFACT CLONE
+              {isManualPdfTemplate ? 'WHITE-OUT + STAMP' : 'ARTIFACT CLONE'}
             </div>
           </div>
-          
           <div className="flex-1 overflow-y-auto p-12 flex justify-center custom-scrollbar">
             <div className="bg-white w-full max-w-[850px] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.2)] min-h-[1100px] border border-slate-200 rounded-sm relative p-0 overflow-hidden">
-               {template.content ? (
+              {isManualPdfTemplate ? (
+                /* Manual PDF path: show original PDF thumbnail */
+                <div className="relative w-full h-full flex flex-col items-start justify-start">
+                  {template.thumbnailUrl ? (
+                    <img src={template.thumbnailUrl} className="w-full h-auto" alt="Original PDF" />
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-slate-400 text-center py-20">
+                      <div><FileText className="w-24 h-24 mx-auto mb-4 opacity-20" /><p className="font-black">Original PDF</p></div>
+                    </div>
+                  )}
+                </div>
+              ) : template.content ? (
                  <div 
                   className="h-full w-full p-20"
                   dangerouslySetInnerHTML={{ __html: generatedHtml }}
@@ -233,65 +236,87 @@ const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ template, team, o
           </div>
         </div>
 
+        {/* Input form */}
         <div className="lg:col-span-4 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl flex flex-col min-h-0 overflow-hidden">
           <div className="p-8 border-b border-slate-100 bg-slate-50/80">
             <h2 className="text-xl font-black flex items-center gap-3 text-slate-900">
-              <Settings className="w-6 h-6 text-blue-600" />
-              Input Mapping
+              {isManualPdfTemplate
+                ? <><Tag className="w-6 h-6 text-amber-500" /> Field Values</>
+                : <><Settings className="w-6 h-6 text-blue-600" /> Input Mapping</>}
             </h2>
-            <p className="text-slate-400 text-sm mt-2 font-bold uppercase tracking-tight">The layout is locked to original spec</p>
+            <p className="text-slate-400 text-sm mt-2 font-bold uppercase tracking-tight">
+              {isManualPdfTemplate ? 'Values are stamped onto the original PDF' : 'The layout is locked to original spec'}
+            </p>
           </div>
-          
           <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-            {template.fields.length === 0 ? (
-              <div className="text-center py-16 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-100">
-                <AlertCircle className="w-12 h-12 mx-auto mb-4 text-slate-200" />
-                <p className="text-slate-500 font-bold">Static Document: No Variables</p>
-              </div>
-            ) : (
-              template.fields.map((field) => (
-                <div key={field.id} className="space-y-3 group">
-                  <div className="flex justify-between items-center px-1">
+            {isManualPdfTemplate ? (
+              /* Manual PDF path: render inputs from pdfFields */
+              template.pdfFields!.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-100">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+                  <p className="text-slate-500 font-bold">No fields defined</p>
+                </div>
+              ) : (
+                template.pdfFields!.map((field) => (
+                  <div key={field.id} className="space-y-3 group">
                     <label className="block text-xs font-black text-slate-500 uppercase tracking-widest">
-                      {field.name}
-                      {field.required && <span className="text-blue-500 ml-1">*</span>}
+                      {field.label}
                     </label>
-                  </div>
-                  {field.type === 'DROPDOWN' ? (
-                    <div className="relative">
-                      <select 
-                        className={`
-                          w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-900 
-                          focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none transition-all appearance-none cursor-pointer
-                          ${focusedField === field.name ? 'border-blue-500 bg-white shadow-lg' : ''}
-                        `}
-                        value={formData[field.name] || ''}
-                        onChange={(e) => setFormData({...formData, [field.name]: e.target.value})}
-                        onFocus={() => setFocusedField(field.name)}
-                        onBlur={() => setFocusedField(null)}
-                      >
-                        <option value="">Select Option</option>
-                        {field.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-                      <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 pointer-events-none rotate-90" />
-                    </div>
-                  ) : (
-                    <input 
-                      type={field.type === 'DATE' ? 'date' : field.type === 'NUMBER' ? 'number' : 'text'}
-                      className={`
-                        w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-900 
-                        focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none transition-all placeholder-slate-300
-                        ${focusedField === field.name ? 'border-blue-500 bg-white shadow-lg' : ''}
-                      `}
-                      placeholder={`Enter ${field.name}...`}
-                      value={formData[field.name] || ''}
-                      onChange={(e) => setFormData({...formData, [field.name]: e.target.value})}
-                      onFocus={() => setFocusedField(field.name)}
+                    <input
+                      type="text"
+                      className={`w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none transition-all placeholder-slate-300 ${focusedField === field.id ? 'border-blue-500 bg-white shadow-lg' : ''}`}
+                      placeholder={`Enter ${field.label}...`}
+                      value={formData[field.id] || ''}
+                      onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+                      onFocus={() => setFocusedField(field.id)}
                       onBlur={() => setFocusedField(null)}
                     />
-                  )}
+                  </div>
+                ))
+              )
+            ) : (
+              /* AI path: render inputs from template.fields */
+              template.fields.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-100">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+                  <p className="text-slate-500 font-bold">Static Document: No Variables</p>
                 </div>
-              ))
+              ) : (
+                template.fields.map((field) => (
+                  <div key={field.id} className="space-y-3 group">
+                    <div className="flex justify-between items-center px-1">
+                      <label className="block text-xs font-black text-slate-500 uppercase tracking-widest">
+                        {field.name}{field.required && <span className="text-blue-500 ml-1">*</span>}
+                      </label>
+                    </div>
+                    {field.type === 'DROPDOWN' ? (
+                      <div className="relative">
+                        <select
+                          className={`w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none transition-all appearance-none cursor-pointer ${focusedField === field.name ? 'border-blue-500 bg-white shadow-lg' : ''}`}
+                          value={formData[field.name] || ''}
+                          onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
+                          onFocus={() => setFocusedField(field.name)}
+                          onBlur={() => setFocusedField(null)}
+                        >
+                          <option value="">Select Option</option>
+                          {field.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                        <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 pointer-events-none rotate-90" />
+                      </div>
+                    ) : (
+                      <input
+                        type={field.type === 'DATE' ? 'date' : field.type === 'NUMBER' ? 'number' : 'text'}
+                        className={`w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none transition-all placeholder-slate-300 ${focusedField === field.name ? 'border-blue-500 bg-white shadow-lg' : ''}`}
+                        placeholder={`Enter ${field.name}...`}
+                        value={formData[field.name] || ''}
+                        onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
+                        onFocus={() => setFocusedField(field.name)}
+                        onBlur={() => setFocusedField(null)}
+                      />
+                    )}
+                  </div>
+                ))
+              )
             )}
           </div>
         </div>

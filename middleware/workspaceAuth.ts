@@ -1,4 +1,16 @@
-import { Request, Response, NextFunction } from 'express';
+// Minimal Express-compatible types (express package not installed in this Vite frontend project)
+interface Request {
+  headers: Record<string, string | string[] | undefined>;
+  method: string;
+  user?: { id: string };
+  [key: string]: any;
+}
+interface Response {
+  status: (code: number) => Response;
+  json: (body: any) => any;
+}
+type NextFunction = () => void;
+
 
 // Mock DB interactions for the purpose of the architecture
 interface DB {
